@@ -2,11 +2,11 @@
 
 (require '[babashka.fs :as fs]
          '[clojure.string :as str]
-         '[wean :as w])
+         '[methadone :as m])
 
-; The README's plots, drawn from wean's own implementation rather than
-; from a restatement of it, so that they cannot quietly go stale when
-; the constants are retuned. Run with `bb plot`.
+; The README's plots, drawn from Methadone's own implementation rather
+; than from a restatement of it, so that they cannot quietly go stale
+; when the constants are retuned. Run with `bb plot`.
 
 ;; Canvas ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -95,15 +95,15 @@
                        (* (- friction-floor top) (/ (double seconds) seconds-max))))
 
 (def ^:private config
-  "The plots describe wean as shipped, so they are drawn at its
+  "The plots describe Methadone as shipped, so they are drawn at its
   defaults."
-  w/defaults)
+  m/defaults)
 
 (defn- waits
   "The wait a bare score earns, in seconds."
   [score]
 
-  (w/friction config {:count score :duration 0}))
+  (m/friction config {:count score :duration 0}))
 
 (defn- spoken
   "A wait, in whichever unit reads more naturally."
@@ -126,8 +126,8 @@
                "usage score")
 
         ; The ceiling, and a crosshair on the midpoint
-        (let [midpoint (:midpoint (w/curve config))
-              ceiling  (:max-friction config)]
+        (let [midpoint (:midpoint (m/curve config))
+              ceiling (:max-friction config)]
           [(line left (fy ceiling) right (fy ceiling) accent "5 4")
            (label (- right 4) (- (fy ceiling) 8) "max-friction"
                   :anchor "end" :size 11 :fill accent)

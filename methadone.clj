@@ -1,16 +1,18 @@
 #!/usr/bin/env bb
 
-;; wean: Seize the means of production from our agentic overlords ;;;;;;
+;; Methadone
+;; Seize the means of production from our agentic overlords ;;;;;;;;;;;;
+
 ; Copyright (C) 2026 Christopher Harrison
 
-; Log format ($XDG_STATE_HOME/wean/log.edn):
+; Log format ($XDG_STATE_HOME/methadone/log.edn):
 ; ```edn
 ; {"<BINARY>"
-;  [{:id    <UUID>      ; unique session ID
-;    :pid   <WEAN PID>  ; the process wean is supervising
-;    :start <INST>      ; when the session began
-;    :end   <INST>      ; when the session ended (optional)
-;    :seen  <INST>}     ; last heartbeat of a running session
+;  [{:id    <UUID>           ; unique session ID
+;    :pid   <METHADONE PID>  ; the process Methadone is supervising
+;    :start <INST>           ; when the session began
+;    :end   <INST>           ; when the session ended (optional)
+;    :seen  <INST>}          ; last heartbeat of a running session
 ;   ...]
 ;  ...}
 ; ```
@@ -28,14 +30,14 @@
 ; You should have received a copy of the GNU General Public License
 ; along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-(ns wean
+(ns methadone
   "Wrap an agentic coding tool in a start-up delay that grows with how
   much it has lately been leant on, counting both how often it was
   launched and how long it was left running.
 
-  wean supervises the tool rather than exec'ing it -- Babashka has no
-  exec -- so it stays in the process tree for the whole session and can
-  therefore record when that session began and ended.")
+  Methadone supervises the tool rather than exec'ing it -- Babashka hash
+  no exec -- so it stays in the process tree for the whole session and
+  can therefore record when that session began and ended.")
 
 (require '[babashka.fs :as fs]
          '[babashka.process :as p]
@@ -51,23 +53,23 @@
   (System/exit 1))
 
 ;; Configuration ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Every setting wean has and the reading and vetting of the wean.edn
-; that may turn them. Pure and impure are kept together here, because a
-; setting and the checking of it belong side by side.
+; Every setting Methadone has and the reading and vetting of the
+; methadone.edn that may turn them. Pure and impure are kept together
+; here, because a setting and the checking of it belong side by side.
 
 (def ^:const defaults
-  "Every setting wean has, at its factory value.
+  "Every setting Methadone has, at its factory value.
 
   Spans of history are milliseconds and a configuration may give them
   as either a bare number of those or an [n unit] pair. Waits are plain
   seconds throughout, being what one actually sits through."
-  {:window             (* 7 24 60 60 1000)   ; The decay's mean lifetime
-   :retention          (* 30 24 60 60 1000)  ; How long a session is kept
-   :heartbeat          (* 60 1000)           ; Between proofs of life
+  {:window (* 7 24 60 60 1000)   ; The decay's mean lifetime
+   :retention (* 30 24 60 60 1000)  ; How long a session is kept
+   :heartbeat (* 60 1000)           ; Between proofs of life
    :session-equivalent (* 30 60 1000)        ; Runtime worth one launch
-   :max-friction       1200                  ; The longest possible wait
-   :anchors            [[10 10] [50 120]]    ; See below
-   :log                nil})                 ; Defaults to the XDG path
+   :max-friction 1200                  ; The longest possible wait
+   :anchors [[10 10] [50 120]]    ; See below
+   :log nil})                 ; Defaults to the XDG path
 
 ; The friction curve is pinned by two opinions rather than by its own
 ; parameters: [score seconds] pairs saying what a light week and a heavy
@@ -106,7 +108,7 @@
 
     (concat
      (for [k (remove (set (keys defaults)) (keys config))]
-       (str k " is not a setting wean has"))
+       (str k " is not a setting Methadone has"))
 
      (for [k spans
            :when (not (pos? (or (span (get config k)) 0)))]
@@ -131,7 +133,7 @@
           ; At the ceiling exactly it divides by zero and throws; at
           ; nothing, or beyond the ceiling, it gives NaN, which rounds
           ; to a wait of nothing at all. Failing wide open, in silence,
-          ; is the one direction wean must not fail in.
+          ; is the one direction Methadone must not fail in.
           (when (and ceiling (not (< 0 f1 f2 ceiling)))
             [(str ":anchors must rise, cost more than nothing and stay"
                   " under :max-friction (" ceiling " s)")]))))
@@ -140,8 +142,8 @@
        [":log must be a path, given as a string"]))))
 
 (defn configure
-  "wean's defaults, overlaid by the given configurations in ascending
-  order of precedence."
+  "Methadone's defaults, overlaid by the given configurations inside
+  ascending order of precedence."
   [configs]
 
   (apply merge defaults (reverse configs)))
@@ -154,34 +156,34 @@
   (reduce #(update %1 %2 span) config spans))
 
 (defn config-files
-  "Where a wean.edn may live, in descending order of precedence: the
-  user's own config home first, then each entry of the given
+  "Where a Methadone.edn may live, in descending order of precedence:
+  the user's own config home first, then each entry of the given
   XDG_CONFIG_DIRS, so that a system-wide file may set a policy its users
   can still overrule."
   [config-home config-dirs]
 
-  (cons (fs/path config-home "wean.edn")
+  (cons (fs/path config-home "methadone.edn")
         (for [dir (str/split (or config-dirs "/etc/xdg") #":")
               :when (seq dir)]
-          (fs/path dir "wean.edn"))))
+          (fs/path dir "methadone.edn"))))
 
 (defn- log-file
   "Where the log lives: as configured, or else the XDG state path."
   [config]
 
-  (str (or (:log config) (fs/path (fs/xdg-state-home "wean") "log.edn"))))
+  (str (or (:log config) (fs/path (fs/xdg-state-home "methadone") "log.edn"))))
 
 (defn- configure!
   "The effective configuration -- the defaults, overlaid by every
-  wean.edn on the search path, with its spans reduced and its log path
-  settled -- or death listing everything wrong with it."
+  methadone.edn on the search path, with its spans reduced and its log-file
+  path settled -- or death listing everything wrong with it."
   []
 
-  (let [read   (fn [path]
-                 (try (edn/read-string (slurp (fs/file path)))
-                      (catch Exception e
-                        (die (str path " is not readable EDN: "
-                                  (ex-message e))))))
+  (let [read (fn [path]
+               (try (edn/read-string (slurp (fs/file path)))
+                    (catch Exception e
+                      (die (str path " is not readable EDN: "
+                                (ex-message e))))))
 
         config (configure (mapv read
                                 (filter fs/exists?
@@ -189,7 +191,7 @@
                                                       (System/getenv "XDG_CONFIG_DIRS")))))]
 
     (when-let [faults (seq (problems config))]
-      (apply die "wean cannot use its configuration:"
+      (apply die "Methadone cannot use its configuration:"
              (map #(str "  " %) faults)))
 
     (let [effective (resolved config)]
@@ -223,9 +225,9 @@
   (let [weight (fn [t] (Math/exp (/ (- (min t now) now) window)))]
     (reduce (fn [{:keys [count duration]} {:keys [start end]}]
               (let [w-start (weight start)
-                    w-end   (weight (max start (or end now)))]
+                    w-end (weight (max start (or end now)))]
 
-                {:count    (+ count w-start)
+                {:count (+ count w-start)
                  :duration (+ duration (* window (- w-end w-start)))}))
 
             {:count 0.0 :duration 0.0}
@@ -247,10 +249,10 @@
 
   (let [[[u1 f1] [u2 f2]] anchors
         logit (fn [f] (Math/log (/ f (- max-friction f))))
-        k     (/ (- (logit f2) (logit f1)) (- u2 u1))]
+        k (/ (- (logit f2) (logit f1)) (- u2 u1))]
 
     {:steepness k
-     :midpoint  (- u1 (/ (logit f1) k))}))
+     :midpoint (- u1 (/ (logit f1) k))}))
 
 (defn friction
   "The wait a given usage has earned, in seconds. A logistic in the
@@ -417,7 +419,7 @@
 
   (locking monitor
     (with-open [raf (java.io.RandomAccessFile. (fs/file lockfile) "rw")
-                ch  (.getChannel raf)]
+                ch (.getChannel raf)]
 
       ; The returned FileLock is discarded: Babashka's reflection
       ; allowlist blocks its .release, .close and .isValid methods and
@@ -452,17 +454,18 @@
   the given file, returning the new session's ID so that it may be closed
   later.
 
-  The PID recorded is wean's own, not the agent's: wean supervises the
-  session, so it is wean's death that leaves one unclosed and its PID
-  that tells a later transaction whether the session was abandoned.
+  The PID recorded is Methadone's own, not the agent's: methadone
+  supervises the session, so it is Methadone's death that leaves one
+  unclosed and its PID that tells a later transaction whether the session
+  was abandoned.
 
   NOTE Call this only once the nag has elapsed, so that a countdown the
   user abandons leaves no trace."
   [config binary now]
 
   (let [id (random-uuid)]
-    (update-log! config #(open % binary {:id    id
-                                         :pid   (.pid (java.lang.ProcessHandle/current))
+    (update-log! config #(open % binary {:id id
+                                         :pid (.pid (java.lang.ProcessHandle/current))
                                          :start now}))
     id))
 
@@ -489,9 +492,9 @@
   running, so that a reap can charge it up to its last heartbeat rather
   than guessing.
 
-  A daemon thread, so it can never hold wean open past the session it is
-  tracking and silent: wean's stderr is the agent's terminal, so a stack
-  trace here would land in the middle of the agent's display."
+  A daemon thread, so it can never hold Methadone open past the session
+  it is tracking and silent: Methadone's stderr is the agent's terminal,
+  so a stack trace here would land in the middle of the agent's display."
   [config id]
 
   (doto (Thread. (fn []
@@ -535,31 +538,32 @@
 
 ; Both dispositions that change do so here, in opposite directions.
 ; SIGINT must now be absorbed: it reaches the whole foreground process
-; group, so the agent receives it and answers it itself, whereas wean
-; dying on it would orphan the agent and return a prompt while it still
-; held the terminal. SIGTSTP must now work, for the mirror image of
-; that reason: were the agent to stop and wean not, the shell would
-; still be waiting on wean and the terminal would sit with no prompt.
-; SIGQUIT stays absorbed throughout, being the agent's to answer too.
+; group, so the agent receives it and answers it itself, whereas
+; Methadone dying on it would orphan the agent and return a prompt while
+; it still held the terminal. SIGTSTP must now work, for the mirror image
+; of that reason: were the agent to stop and Methadone not, the shell
+; would still be waiting on Methadone and the terminal would sit with no
+; prompt. SIGQUIT stays absorbed throughout, being the agent's to answer
+; too.
 (def ^:private supervise-signals
-  {"INT"  absorb
+  {"INT" absorb
    "TSTP" sun.misc.SignalHandler/SIG_DFL})
 
 ;; Nag UI ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (def ^:private terminal?
-  "Whether wean has a terminal to draw on. Without one, colour and cursor
-  control alike are just noise in somebody's log file."
+  "Whether Methadone has a terminal to draw on. Without one, colour and
+  cursor control alike are just noise in somebody's log file."
   (some? (System/console)))
 
 (def ^:private colours
   "ANSI attributes, empty when there is no terminal so that redirected
   output stays clean."
   (when terminal?
-    {:bold      "\033[1m"
-     :dim       "\033[2m"
-     :red       "\033[31m"
-     :reset     "\033[0m"}))
+    {:bold "\033[1m"
+     :dim "\033[2m"
+     :red "\033[31m"
+     :reset "\033[0m"}))
 
 (defn- colour [attribute] (get colours attribute ""))
 
@@ -568,18 +572,18 @@
   [ms]
 
   (let [seconds (long (/ ms 1000))
-        hours   (quot seconds 3600)
+        hours (quot seconds 3600)
         minutes (rem (quot seconds 60) 60)]
 
     (cond
-      (pos? hours)   (format "%dh %dm" hours minutes)
+      (pos? hours) (format "%dh %dm" hours minutes)
       (pos? minutes) (format "%dm" minutes)
-      :else          (format "%ds" (rem seconds 60)))))
+      :else (format "%ds" (rem seconds 60)))))
 
 (defn summary
   "What the wait was earned with, in a line.
 
-  The figures are decayed by age, so they are what wean is weighing
+  The figures are decayed by age, so they are what Methadone is weighing
   rather than a raw tally: a fortnight-old session is in there, but
   barely. Worth saying at all because the cost of leaving a session open
   is charged the next time round and a penalty nobody can connect to
@@ -628,11 +632,11 @@
 ;; Process handling ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn- spawn
-  "Run the given binary with the given arguments, inheriting wean's
+  "Run the given binary with the given arguments, inheriting Methadone's
   streams so that the agent has the terminal.
 
   Where setpriv is available, the agent is given a parent-death signal,
-  so that killing wean outright takes the agent with it rather than
+  so that killing Methadone outright takes the agent with it rather than
   leaving it orphaned. SIGKILL cannot be caught, so this is the only way
   to cover that case; it is a Linux-specific facility, so elsewhere, the
   shutdown hook is the only safeguard."
@@ -644,8 +648,8 @@
              {:inherit true}))
 
 (defn- discover
-  "The first binary in the PATH under the name wean was invoked as,
-  other than wean itself."
+  "The first binary in the PATH under the name Methadone was invoked as,
+  other than Methadone itself."
   [me]
 
   (let [self (fs/real-path me)]
@@ -654,14 +658,14 @@
          first)))
 
 (defn- target
-  "The binary wean is supervising, as an absolute path."
+  "The binary Methadone is supervising, as an absolute path."
   [me]
 
-  (or (System/getenv "WEAN_BINARY")  ; Env var, mostly for Nix...
-      (some-> (discover me) str)     ; ...otherwise, PATH discovery...
+  (or (System/getenv "METHADONE_BINARY")  ; Env var, mostly for Nix...
+      (some-> (discover me) str)          ; ...otherwise, PATH discovery...
 
       ; ...or die horribly
-      (die (str "WEAN_BINARY not set, nor " (fs/file-name me)
+      (die (str "METHADONE_BINARY not set, nor " (fs/file-name me)
                 " found in PATH!"))))
 
 ;; Entrypoint ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -669,12 +673,12 @@
 (defn -main [& args]
   (let [config (configure!)
         binary (target (System/getProperty "babashka.file"))
-        name   (fs/file-name binary)]
+        name (fs/file-name binary)]
 
     (fs/create-dirs (fs/parent (:log config)))
     (signals! nag-signals)
 
-    (let [now  (System/currentTimeMillis)
+    (let [now (System/currentTimeMillis)
           used (-> (read-log (:log config))
                    (reap pid-alive?)
                    (sessions-for name)
@@ -684,7 +688,7 @@
 
     (signals! supervise-signals)
 
-    (let [id   (open-session! config name (System/currentTimeMillis))
+    (let [id (open-session! config name (System/currentTimeMillis))
           proc (spawn binary args)]
 
       (start-heartbeat! config id)
