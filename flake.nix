@@ -1,5 +1,5 @@
 {
-  description = "wean: seize the means of production from our agentic overloads";
+  description = "Methadone: seize the means of production from our agentic overloads";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
@@ -15,15 +15,15 @@
 
       # Everything the QA tasks operate on, so that the checks and the
       # formatter cannot drift apart over which files they cover.
-      clojure = "wean.clj wean_test.clj plot.clj bb.edn";
-      nix = "flake.nix wean.nix";
+      clojure = "methadone.clj methadone_test.clj plot.clj bb.edn";
+      nix = "flake.nix methadone.nix";
 
       # A QA check: run the script against a writeable copy of the
       # sources and, if it succeeds, produce the output the build needs
       # to pass.
       qa =
         pkgs: name: packages: script:
-        pkgs.runCommand "wean-check-${name}" { nativeBuildInputs = packages; } ''
+        pkgs.runCommand "methadone-check-${name}" { nativeBuildInputs = packages; } ''
           export HOME="$TMPDIR"
           cp -r ${self} source && chmod -R +w source && cd source
           ${script}
@@ -60,23 +60,23 @@
         # something to wrap, so this is also the only coverage the
         # packaging gets: it exercises writeBabashkaBin, the lint the
         # writer runs over the script it installs, the makeWrapper
-        # indirection that supplies WEAN_BINARY and the supervisor
+        # indirection that supplies METHADONE_BINARY and the supervisor
         # itself.
         smoke =
           let
-            wrapped = pkgs.callPackage ./wean.nix {
+            wrapped = pkgs.callPackage ./methadone.nix {
               package = pkgs.coreutils;
               binary = "date";
             };
           in
-          pkgs.runCommand "wean-check-smoke" { } ''
+          pkgs.runCommand "methadone-check-smoke" { } ''
             export XDG_STATE_HOME="$TMPDIR/state"
 
             ${wrapped}/bin/date -u
             ${wrapped}/bin/date +%s
 
             if ${wrapped}/bin/date --nope; then
-              echo "wean did not propagate a failing exit code" >&2
+              echo "Methadone did not propagate a failing exit code" >&2
               exit 1
             fi
 
@@ -87,7 +87,7 @@
       formatter = forAllSystems (
         pkgs:
         pkgs.writeShellApplication {
-          name = "wean-fmt";
+          name = "methadone-fmt";
           runtimeInputs = [
             pkgs.cljfmt
             pkgs.nixfmt

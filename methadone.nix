@@ -25,9 +25,9 @@ let
     {:linters {:namespace-name-mismatch {:level :off}}}
   '';
 
-  wean = writers.writeBabashkaBin "wean" {
+  methadone = writers.writeBabashkaBin "methadone" {
     check = "${lib.getExe clj-kondo} --config ${kondo} --lint";
-  } (builtins.readFile ./wean.clj);
+  } (builtins.readFile ./methadone.clj);
 in
 runCommand binary
   {
@@ -35,6 +35,6 @@ runCommand binary
     meta.mainProgram = binary;
   }
   ''
-    makeWrapper ${wean}/bin/wean $out/bin/${binary} \
-      --set WEAN_BINARY ${package}/bin/${binary}
+    makeWrapper ${methadone}/bin/methadone $out/bin/${binary} \
+      --set METHADONE_BINARY ${package}/bin/${binary}
   ''

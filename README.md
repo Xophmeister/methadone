@@ -1,4 +1,4 @@
-# wean
+# Methadone
 
 It occurred to me that agentic AI tools can exacerbate the feeling of
 estrangement from ones own work, per Marx's [Theory of Alienation], and
@@ -23,7 +23,7 @@ configuration, for example, like so:
 
 {
   environment.systemPackages = with pkgs; [
-    (callPackage ./path/to/wean.nix {
+    (callPackage ./path/to/methadone.nix {
         package = pkgs.claude-code;
         binary = "claude";
     })
@@ -35,7 +35,7 @@ or, with [Home-manager]:
 
 ```nix
 home-manager.users.YOU.home.packages = with pkgs; [
-  (callPackage ./path/to/wean.nix {
+  (callPackage ./path/to/methadone.nix {
       package = pkgs.github-copilot-cli;
       binary = "copilot";
   })
@@ -47,42 +47,42 @@ home-manager.users.YOU.home.packages = with pkgs; [
 I gotchu, bro. All you need is [Babashka] on your `$PATH`, plus a
 directory that takes precedence over the binary you want to wrap:
 
-1. Put `wean.clj` somewhere permanent:
+1. Put `methadone.clj` somewhere permanent:
 
    ```sh
-   install -Dm755 wean.clj ~/.local/share/wean/wean.clj
+   install -Dm755 methadone.clj ~/.local/share/methadone/methadone.clj
    ```
 
-2. Symlink it into a directory that comes _earlier_ in your `$PATH`
-   than the real binary, with that binary's name:
+2. Symlink it into a directory that comes _earlier_ in your `$PATH` than
+   the real binary, with that binary's name:
 
    ```sh
-   ln -s ~/.local/share/wean/wean.clj ~/.local/bin/claude
+   ln -s ~/.local/share/methadone/methadone.clj ~/.local/bin/claude
    ```
 
 3. Rinse and repeat for anything else you want to wrap: one symlink
    each, all pointing at the same script.
 
-wean works out what to run from the name it was invoked as. It looks
-along `$PATH` for the next binary of that name which isn't itself, so
-the symlink shadows the real `claude` and wean finds it immediately
-behind. There's nothing to configure per binary.
+Methadone works out what to run from the name it was invoked as. It
+looks along `$PATH` for the next binary of that name which isn't itself,
+so the symlink shadows the real `claude` and Methadone finds it
+immediately behind. There's nothing to configure per binary.
 
 If that's not what you want -- the real binary isn't on `$PATH`, or you
-want to wrap it under a different name -- set `WEAN_BINARY` to its full
-path and wean will use that instead. That's how the Nix route works:
-the wrapper sets it for you.
+want to wrap it under a different name -- set `METHADONE_BINARY` to its
+full path and Methadone will use that instead. That's how the Nix route
+works: the wrapper sets it for you.
 
 ## Methodology
 
 The wait is a function of two things: how often you've launched the
 tool, and how long you've kept it running. Recent use counts for more
-than old and the whole thing is bounded, so that wean never becomes so
-obstructive that deleting it is the rational move.
+than old and the whole thing is bounded, so that Methadone never becomes
+so obstructive that deleting it is the rational move.
 
 ### Nothing expires; it fades
 
-wean doesn't count usage inside a fixed window. Every session is
+Methadone doesn't count usage inside a fixed window. Every session is
 weighted by its age instead, with an exponential decay:
 
 ![The decay of a session's weight with its age](/doc/decay.svg)
@@ -125,7 +125,8 @@ and someone churning through short sessions is punished harder than
 someone who never closes one at all.
 
 Because the cost of leaving a session open is only charged the _next_
-time you start one, wean says what it is weighing as it makes you wait:
+time you start one, Methadone says what it is weighing as it makes you
+wait:
 
 ```
 Do not overuse this! Use your brain, instead!
@@ -157,7 +158,7 @@ rather than climbing forever.
 That bound is deliberate. The obvious alternative -- keep doubling, as
 the original did -- reaches hours within a fortnight and a wait long
 enough to be worth circumventing buys no deterrence at all: the bypass
-is a single `rm`. A wean that's been deleted measures nothing.
+is a single `rm`. A Methadone that's been deleted measures nothing.
 
 A hard cap has the opposite defect. Past the cap, more usage is free:
 you've paid the toll, so you may as well carry on. A logistic approaches
@@ -192,18 +193,19 @@ Moving the ceiling barely disturbs the anchored region:
 | `[[10 20] [50 240]]` | 18 s       | 3 min      | 19 min                 |
 
 So the anchors set how the everyday feels and the ceiling sets what the
-worst case costs; you can tune either without upsetting the other.
-All four are settings, described under [Configuration](#configuration).
+worst case costs; you can tune either without upsetting the other. All
+four are settings, described under [Configuration](#configuration).
 
 ## Configuration
 
-wean runs on its defaults with no configuration at all. To change them,
-drop a `wean.edn` in `$XDG_CONFIG_HOME` (usually `~/.config/wean.edn`):
+Methadone runs on its defaults with no configuration at all. To change
+them, drop a `methadone.edn` in `$XDG_CONFIG_HOME` (usually
+`~/.config/methadone.edn`):
 
 ```edn
 {:window   [14 :days]
  :anchors  [[10 30] [50 300]]
- :log      "/home/you/.local/state/wean/log.edn"}
+ :log      "/home/you/.local/state/methadone/log.edn"}
 ```
 
 Anything you leave out keeps its default, so a file need only name what
@@ -226,36 +228,37 @@ through, are always plain seconds.
 
 ### System-wide defaults
 
-wean also reads a `wean.edn` from each directory in `$XDG_CONFIG_DIRS`,
-after your own. Yours wins, so a NixOS module can install a policy at
-`/etc/xdg/wean.edn` that you remain free to overrule.
+Methadone also reads a `methadone.edn` from each directory in
+`$XDG_CONFIG_DIRS`, after your own. Yours wins, so a NixOS module can
+install a policy at `/etc/xdg/methadone.edn` that you remain free to
+overrule.
 
 ### If you get it wrong
 
-wean refuses to start and says everything that is wrong in one go rather
-than one fault at a time:
+Methadone refuses to start and says everything that is wrong in one go
+rather than one fault at a time:
 
 ```
-wean cannot use its configuration:
-  :windwo is not a setting wean has
+Methadone cannot use its configuration:
+  :windwo is not a setting Methadone has
   :retention must be a positive span: milliseconds, or [n unit] with unit one of days, hours, minutes, ms, seconds
   :anchors must rise, cost more than nothing and stay under :max-friction (1200 s)
 ```
 
 Refusing outright is deliberate. The alternative -- shrugging and
-falling back to the defaults -- means a typo can quietly turn wean into
-something that isn't watching you at all, which is exactly the failure
-you would never notice. The anchor rule earns its keep here in
+falling back to the defaults -- means a typo can quietly turn Methadone
+into something that isn't watching you at all, which is exactly the
+failure you would never notice. The anchor rule earns its keep here in
 particular: an anchor at or beyond `:max-friction` has no finite
 logarithm and the wait that falls out of the arithmetic is _zero_.
 
 ## State
 
-wean keeps a log at `$XDG_STATE_HOME/wean/log.edn` -- usually
-`~/.local/state/wean/log.edn` -- with one entry per session per wrapped
-binary, recording when it started and when it ended. Set `:log` if you
-would rather it lived elsewhere. Deleting it resets
-the friction to nothing, which segues neatly to...
+Methadone keeps a log at `$XDG_STATE_HOME/methadone/log.edn` -- usually
+`~/.local/state/methadone/log.edn` -- with one entry per session per
+wrapped binary, recording when it started and when it ended. Set `:log`
+if you would rather it lived elsewhere. Deleting it resets the friction
+to nothing, which segues neatly to...
 
 ## Isn't this trivial to bypass?
 
@@ -265,13 +268,13 @@ twice before reaching for agentic AI tools and, hopefully, building a
 habit of re-engaging with your own work.
 
 Ctrl+C is not one of the ways round it, but nor is it meant to be a
-trap. During the countdown it abandons the launch outright: wean exits,
-the agent never starts and nothing is written to the log, so thinking
-better of it costs nothing and is not held against you next time. What
-it cannot do is hurry the wait along, there being no agent on the far
-side of it to hurry towards. Once the agent is running, wean ignores
-Ctrl+C and leaves the agent to answer it, as it is much better placed
-to know what interrupting it should mean.
+trap. During the countdown it abandons the launch outright: Methadone
+exits, the agent never starts and nothing is written to the log, so
+thinking better of it costs nothing and is not held against you next
+time. What it cannot do is hurry the wait along, there being no agent on
+the far side of it to hurry towards. Once the agent is running,
+Methadone ignores Ctrl+C and leaves the agent to answer it, as it is
+much better placed to know what interrupting it should mean.
 
 ## Agent instructions
 
