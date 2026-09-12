@@ -83,7 +83,12 @@ so obstructive that deleting it is the rational move.
 ### Nothing expires; it fades
 
 Methadone doesn't count usage inside a fixed window. Every session is
-weighted by its age instead, with an exponential decay:
+weighted by its age instead, with an exponential decay in which $T$ is
+now and $W$ is the `:window`:
+
+```math
+w(t) = e^{-(T - t) / W}
+```
 
 ![The decay of a session's weight with its age](/doc/decay.svg)
 
@@ -93,27 +98,42 @@ earned; a free pass on a schedule you could learn and time your work
 around. Decaying the weight removes the cliff: old sessions never stop
 counting, they just matter less.
 
-`:window` is therefore a mean lifetime rather than a cut-off. A week's
-window puts the half-life a shade under five days.
+`:window` is therefore a mean lifetime rather than a cut-off. The
+half-life follows from it, $w(t) = \frac{1}{2}$ at an age of
+$T - t = W \ln 2$, which a week's window puts a shade under five days.
 
-Time spent is _integrated_ across a session rather than weighted at its
-start, so the older part of a long session is discounted against its
-newer. That has a pleasant consequence: a session you never close
-converges on exactly one window's worth and stops growing. Leaving one
-open forever is bounded, not infinite.
+That gives two decayed totals: a count of launches $N$ and a time spent
+$D$. They are weighed differently, because a launch is an instant and
+takes the weight of its moment, whereas time spent is a span and so is
+_integrated_ across the session. Writing $s_i$ and $e_i$ for the start
+and end of each, an open one ending at $T$ for the time being:
+
+```math
+N = \sum_i w(s_i)
+\qquad
+D = \sum_i \int_{s_i}^{e_i} w(t) \, dt = W \sum_i (w(e_i) - w(s_i))
+```
+
+Integrating, rather than weighting the whole span at its start,
+discounts the older part of a long session against its newer, and it
+has a pleasant consequence. A session you never close has $e_i = T$, so
+it contributes $W(1 - w(s_i))$: a quantity that approaches one window's
+worth and never reaches it, however long you leave the thing running.
+Its old end decays exactly as fast as its new end accrues. Leaving a
+session open forever is bounded, not infinite.
 
 ### One number, two habits
 
 The two measurements are traded against each other at a fixed rate and
-added together:
+added together into a single score:
 
-```
-score = launches + time spent / :session-equivalent
+```math
+u = N + \frac{D}{E}
 ```
 
-`:session-equivalent` (30 minutes) is that rate, and it reads as a
-question in English: _how long may a session run before it counts as
-another launch?_
+$E$ is the `:session-equivalent`, that rate, and at its default of 30
+minutes it reads as a question in English: _how long may a session run
+before it counts as another launch?_
 
 Both terms are needed, because the friction is a start-up cost and
 nothing else. Once the nag is paid, keeping a session open is free, so
@@ -148,7 +168,12 @@ same as the lightest.
 
 ### The curve
 
-The score is fed through a logistic:
+The score is fed through a logistic, of ceiling $L$, steepness $k$ and
+midpoint $u_0$:
+
+```math
+f(u) = \frac{L}{1 + e^{-k (u - u_0)}}
+```
 
 ![The wait, against the usage score](/doc/friction.svg)
 
@@ -174,7 +199,23 @@ and a heavy one ought to cost. The steepness and midpoint are _solved
 for_ from them rather than written down, because `0.0645` and `84.04`
 are numbers nobody can sanity-check, whereas "ten seconds after a light
 week" is a judgement you can actually hold. `:max-friction` is the
-ceiling.
+ceiling, $L$.
+
+Inverting the logistic gives $\ln\frac{f}{L - f} = k(u - u_0)$, which
+is linear in the score, so a pair of anchors $(u_1, f_1)$ and
+$(u_2, f_2)$ is enough to fix both unknowns:
+
+```math
+k = \frac{1}{u_2 - u_1}
+    \left( \ln\frac{f_2}{L - f_2} - \ln\frac{f_1}{L - f_1} \right)
+\qquad
+u_0 = u_1 - \frac{1}{k} \ln\frac{f_1}{L - f_1}
+```
+
+Those logarithms are where the configuration guard comes from, too:
+their argument is positive and finite only for $0 < f < L$, so an
+anchor costing nothing, or costing the ceiling or more, leaves nothing
+to solve. See [If you get it wrong](#if-you-get-it-wrong).
 
 Moving the ceiling barely disturbs the anchored region:
 
