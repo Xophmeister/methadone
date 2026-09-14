@@ -514,17 +514,118 @@
   cursor control alike are just noise in somebody's log file."
   (some? (System/console)))
 
-(def ^:private colours
+(def ^:private ansi-attributes
   "ANSI attributes, empty when there is no terminal so that redirected
   output stays clean."
   (when terminal?
     {:bold "\033[1m"
      :dim "\033[2m"
-     :red "\033[31m"
      :green "\033[32m"
-     :reset "\033[0m"}))
+     :yellow "\033[33m"
+     :red "\033[31m"
+     :reset "\033[0m"
+     :erase "\033[K"}))
 
-(defn- colour [attribute] (get colours attribute ""))
+(defn- ansi [attribute] (get ansi-attributes attribute ""))
+
+;; Nag UI ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(def ^:private consternations
+  "The list of consternations given to the user during the nag countdown,
+  in ascending order of severity, with their styles baked-in."
+
+  ["A modest dose. Mind how you go."
+   "Back for a top-up already, are we?"
+   (str (ansi :yellow) "This was meant to be the substitute, not the habit.")
+   (str (ansi :yellow) "You are building quite the tolerance.")
+   (str (ansi :red) "Do not overuse this! Use your brain, instead!")
+   (str (ansi :red) "Whose theory of this program is it now? Yours...or its?")
+   (str (ansi :bold) (ansi :red) "You are becoming a stranger to your own work!")
+   (str (ansi :bold) (ansi :red) "The means of production are slipping away, comrade!")])
+
+(def ^:private commendations
+  "The list of Ctrl+C commendations, should the user realise the error
+  of their ways and abandon the launch."
+
+  ["You are a credit to the species!"
+   "Humanity applauds you!"
+   "You're right: Drugs don't work."
+   "Your grey cells will live to see another day!"
+   "Welcome to the revolution, comrade!"])
+
+(defn spoken
+  "A span of milliseconds, in whichever units read most naturally."
+  [ms]
+
+  (let [seconds (long (/ ms 1000))
+        hours (quot seconds 3600)
+        minutes (rem (quot seconds 60) 60)]
+
+    (cond
+      (pos? hours) (format "%dh %dm" hours minutes)
+      (pos? minutes) (format "%dm" minutes)
+      :else (format "%ds" (rem seconds 60)))))
+
+(defn scorn
+  "Scorn the user for (over)using the agent, with a consternation chosen
+  based on the score from the list available."
+  [config usage]
+
+  (let [midpoint (:midpoint (curve config))
+        length (count consternations)]
+
+    (-> (score config usage)
+        (/ (* 2 midpoint))
+        (* length)
+        (min (dec length))
+        int
+        consternations)))
+
+(defn summary
+  "What the wait was earned with, in a line.
+
+  The figures are decayed by age, so they are what Methadone is weighing
+  rather than a raw tally: a fortnight-old session is in there, but
+  barely. Worth saying at all because the cost of leaving a session open
+  is charged the next time round and a penalty nobody can connect to
+  what caused it teaches nothing."
+  [config usage]
+
+  (let [launches (Math/round (double (:count usage)))]
+    (format "Lately: %d %s, %s running, for a score of %d."
+            launches
+            (if (= 1 launches) "launch" "launches")
+            (spoken (:duration usage))
+            (Math/round (double (score config usage))))))
+
+(defn- countdown
+  "Count down the given number of seconds, rewriting a single line in
+  place. Without a terminal the wait still happens, in silence: cursor
+  control smeared through a redirected log helps nobody."
+  ([seconds] (countdown seconds terminal?))
+
+  ([seconds draw?]
+   (if-not draw?
+     (Thread/sleep (* 1000 seconds))
+
+     (do (doseq [remaining (range seconds 0 -1)]
+           (print (format "\r%s%sPaused: %d s remaining...%s"
+                          (ansi :erase) (ansi :dim) remaining (ansi :reset)))
+           (flush)
+           (Thread/sleep 1000))
+
+         (print (str "\r" (ansi :erase)))
+         (flush)))))
+
+(defn nag
+  "Scold the user, account for why, then pause for the given number of
+  seconds."
+  [config usage seconds]
+
+  (println (str (scorn config usage) (ansi :reset)))
+  (println (str (ansi :dim) (summary config usage) (ansi :reset)))
+
+  (countdown seconds))
 
 ;; Signal handling policy ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -534,11 +635,12 @@
   (reify sun.misc.SignalHandler (handle [_ _] nil)))
 
 (def ^:private applaud
-  "A handler that applauds the user for abandoining the launch."
+  "A handler that applauds the user for abandoning the launch with a
+  random commendation."
   (reify sun.misc.SignalHandler
     (handle [_ _]
-      (when terminal? (print "\r\033[K"))
-      (println (str (colour :green) "Launch abandoned." (colour :reset)))
+      (when terminal? (print (str "\r" (ansi :erase))))
+      (println (str (ansi :green) (rand-nth commendations) (ansi :reset)))
       (flush)
       (System/exit 130))))
 
@@ -574,70 +676,6 @@
 (def ^:private supervise-signals
   {"INT" absorb
    "TSTP" sun.misc.SignalHandler/SIG_DFL})
-
-;; Nag UI ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(defn spoken
-  "A span of milliseconds, in whichever units read most naturally."
-  [ms]
-
-  (let [seconds (long (/ ms 1000))
-        hours (quot seconds 3600)
-        minutes (rem (quot seconds 60) 60)]
-
-    (cond
-      (pos? hours) (format "%dh %dm" hours minutes)
-      (pos? minutes) (format "%dm" minutes)
-      :else (format "%ds" (rem seconds 60)))))
-
-(defn summary
-  "What the wait was earned with, in a line.
-
-  The figures are decayed by age, so they are what Methadone is weighing
-  rather than a raw tally: a fortnight-old session is in there, but
-  barely. Worth saying at all because the cost of leaving a session open
-  is charged the next time round and a penalty nobody can connect to
-  what caused it teaches nothing."
-  [config usage]
-
-  (let [launches (Math/round (double (:count usage)))]
-    (format "Lately: %d %s, %s running, for a score of %d."
-            launches
-            (if (= 1 launches) "launch" "launches")
-            (spoken (:duration usage))
-            (Math/round (double (score config usage))))))
-
-(defn- countdown
-  "Count down the given number of seconds, rewriting a single line in
-  place. Without a terminal the wait still happens, in silence: cursor
-  control smeared through a redirected log helps nobody."
-  ([seconds] (countdown seconds terminal?))
-
-  ([seconds draw?]
-   (if-not draw?
-     (Thread/sleep (* 1000 seconds))
-
-     (do (doseq [remaining (range seconds 0 -1)]
-           (print (format "\r\033[K%sPaused: %d s remaining...%s"
-                          (colour :dim) remaining (colour :reset)))
-           (flush)
-           (Thread/sleep 1000))
-
-         (print "\r\033[K")
-         (flush)))))
-
-(defn nag
-  "Scold the user, account for why, then pause for the given number of
-  seconds."
-  [config usage seconds]
-
-  (println (str (colour :bold) (colour :red)
-                "Do not overuse this! Use your brain, instead!"
-                (colour :reset)))
-
-  (println (str (colour :dim) (summary config usage) (colour :reset)))
-
-  (countdown seconds))
 
 ;; Process handling ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
