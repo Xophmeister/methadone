@@ -3,6 +3,7 @@
 (require '[babashka.fs :as fs]
          '[babashka.process :as p]
          '[clojure.edn :as edn]
+         '[clojure.string :as str]
          '[clojure.test :as t]
          '[methadone :as m])
 
@@ -418,6 +419,52 @@
 
     (t/testing "and the score, it being what the wait is drawn from"
       (t/is (re-find #"score of 25" line)))))
+
+(t/deftest climbing-the-ladder
+  ; The rung is arrived at by arithmetic on an unbounded score, which is
+  ; a thing to keep pinned: a wrong index is silent where it isn't fatal,
+  ; and the worst of it only shows at the extremes nobody reaches by
+  ; hand. Sweeping the range is cheaper than reasoning about it.
+  (let [ladder  @#'m/consternations
+        rung    (zipmap ladder (range))
+        chosen  #(m/scorn config {:count (double %) :duration 0})
+        climbed (mapv (comp rung chosen) (range 0 400 0.5))]
+
+    (t/testing "every score lands on the ladder, none of them beside it"
+      (t/is (every? some? climbed)))
+
+    (t/testing "which is climbed, and never descended"
+      (t/is (= climbed (sort climbed))))
+
+    (t/testing "every rung of it, or the harshest words are never said"
+      (t/is (= (set (range (count ladder))) (set climbed))))
+
+    (t/testing "a clean slate is met with the mildest"
+      (t/is (= (first ladder) (chosen 0))))
+
+    (t/testing "and an absurd score with the sternest, not an index off the end"
+      (t/is (= (last ladder) (chosen 1e6))))
+
+    ; The anchors exist to tell these two apart, so the words must too:
+    ; scolding both alike is what keying the rung to the wait would have
+    ; done, the logistic being nearly flat across everyday usage.
+    (t/testing "a light week and a heavy one are not scolded alike"
+      (t/is (not= (chosen 8) (chosen 47))))
+
+    (t/testing "and what is chosen is what the nag says"
+      (t/is (str/includes? (with-out-str (m/nag config {:count 8.0 :duration 0} 0))
+                           (chosen 8))))))
+
+(t/deftest commending-the-change-of-heart
+  ; applaud draws one of these at the moment it fires and exits on the
+  ; next line, so an empty list would throw inside a signal handler,
+  ; during a wait, with nothing left to report it.
+  (let [praise @#'m/commendations]
+    (t/testing "there is something to say"
+      (t/is (seq praise)))
+
+    (t/testing "and all of it is worth saying"
+      (t/is (every? #(and (string? %) (seq (str/trim %))) praise)))))
 
 (t/deftest drawing-only-on-a-terminal
   ; The countdown rewrites one line with cursor control. Redirected,

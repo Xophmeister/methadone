@@ -149,9 +149,18 @@ time you start one, Methadone says what it is weighing as it makes you
 wait:
 
 ```
-Do not overuse this! Use your brain, instead!
+Back for a top-up already, are we?
 Lately: 6 launches, 9h 11m running, for a score of 25.
 ```
+
+The scolding escalates with the score as well. A ladder of messages,
+ordered from mild concern to open denunciation, is spread evenly across
+the span of score the curve actually varies over, which is twice its
+midpoint; past the top of that span there is nothing harsher left to
+say, so the sternest of them stands. The words therefore keep pace with
+the wait rather than repeating one rebuke at every level, and a week bad
+enough to be worth remarking on is remarked upon differently from a
+quiet one.
 
 Consider the following three habits to make that concrete; each a week's
 worth, at the point where the decay has settled:
@@ -310,10 +319,10 @@ habit of re-engaging with your own work.
 
 Ctrl+C is not one of the ways round it, but nor is it meant to be a
 trap. During the countdown it abandons the launch outright: Methadone
-exits, the agent never starts and nothing is written to the log, so
-thinking better of it costs nothing and is not held against you next
-time. What it cannot do is hurry the wait along, there being no agent on
-the far side of it to hurry towards. Once the agent is running,
+commends you, exits, the agent never starts and nothing is written to
+the log, so thinking better of it costs nothing and is not held against
+you next time. What it cannot do is hurry the wait along, there being no
+agent on the far side of it to hurry towards. Once the agent is running,
 Methadone ignores Ctrl+C and leaves the agent to answer it, as it is
 much better placed to know what interrupting it should mean.
 
