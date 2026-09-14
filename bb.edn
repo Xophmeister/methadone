@@ -46,4 +46,4 @@
         :task     (plot/generate!)}}
 
  :aliases
- {:neil {:project {:version "0.3.0"}}}}
+ {:neil {:project {:version "0.4.0"}}}}
