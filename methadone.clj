@@ -507,12 +507,40 @@
     (.setDaemon true)
     (.start)))
 
+;; TTY handling ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(def ^:private terminal?
+  "Whether Methadone has a terminal to draw on. Without one, colour and
+  cursor control alike are just noise in somebody's log file."
+  (some? (System/console)))
+
+(def ^:private colours
+  "ANSI attributes, empty when there is no terminal so that redirected
+  output stays clean."
+  (when terminal?
+    {:bold "\033[1m"
+     :dim "\033[2m"
+     :red "\033[31m"
+     :green "\033[32m"
+     :reset "\033[0m"}))
+
+(defn- colour [attribute] (get colours attribute ""))
+
 ;; Signal handling policy ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (def ^:private absorb
   "A handler that does nothing, so the signal is neither acted upon nor
   passed to the default disposition."
   (reify sun.misc.SignalHandler (handle [_ _] nil)))
+
+(def ^:private applaud
+  "A handler that applauds the user for abandoining the launch."
+  (reify sun.misc.SignalHandler
+    (handle [_ _]
+      (when terminal? (print "\r\033[K"))
+      (println (str (colour :green) "Launch abandoned." (colour :reset)))
+      (flush)
+      (System/exit 130))))
 
 (defn- signals!
   "Set the disposition of each named signal."
@@ -526,15 +554,13 @@
 ; Babashka, SIGINT cannot be restored once ignored. A caught signal is
 ; reset to its default across exec, so the agent starts clean and no
 ; restoration step is needed.
-
-; SIGINT is conspicuously absent here. During the nag no session has
-; been recorded and no agent yet exists, so dying on it costs nothing
-; and orphans nobody: Ctrl+C abandons the launch, as it means anywhere
-; else. Nor can it be used to duck the wait, there being no agent on
-; the far side of it -- so absorbing it would only trap somebody who
-; had changed their mind, which is not a habit worth discouraging.
+; Applauded rather than absorbed: SIGINT is handled by abandoning the
+; launch altogether, so the user is congratulated for doing so and
+; returned to the terminal.
 (def ^:private nag-signals
-  {"QUIT" absorb "TSTP" absorb})
+  {"INT" applaud
+   "QUIT" absorb
+   "TSTP" absorb})
 
 ; Both dispositions that change do so here, in opposite directions.
 ; SIGINT must now be absorbed: it reaches the whole foreground process
@@ -550,22 +576,6 @@
    "TSTP" sun.misc.SignalHandler/SIG_DFL})
 
 ;; Nag UI ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(def ^:private terminal?
-  "Whether Methadone has a terminal to draw on. Without one, colour and
-  cursor control alike are just noise in somebody's log file."
-  (some? (System/console)))
-
-(def ^:private colours
-  "ANSI attributes, empty when there is no terminal so that redirected
-  output stays clean."
-  (when terminal?
-    {:bold "\033[1m"
-     :dim "\033[2m"
-     :red "\033[31m"
-     :reset "\033[0m"}))
-
-(defn- colour [attribute] (get colours attribute ""))
 
 (defn spoken
   "A span of milliseconds, in whichever units read most naturally."
