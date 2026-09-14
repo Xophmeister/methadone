@@ -2,7 +2,8 @@
 
 (require '[babashka.fs :as fs]
          '[clojure.string :as str]
-         '[methadone :as m])
+         '[methadone.config :as config]
+         '[methadone.policy :as policy])
 
 ; The README's plots, drawn from Methadone's own implementation rather
 ; than from a restatement of it, so that they cannot quietly go stale
@@ -97,13 +98,13 @@
 (def ^:private config
   "The plots describe Methadone as shipped, so they are drawn at its
   defaults."
-  m/defaults)
+  config/defaults)
 
 (defn- waits
   "The wait a bare score earns, in seconds."
   [score]
 
-  (m/friction config {:count score :duration 0}))
+  (policy/friction config {:count score :duration 0}))
 
 (defn- spoken
   "A wait, in whichever unit reads more naturally."
@@ -126,8 +127,8 @@
                "usage score")
 
         ; The ceiling, and a crosshair on the midpoint
-        (let [midpoint (:midpoint (m/curve config))
-              ceiling (:max-friction config)]
+        (let [midpoint (:midpoint (policy/curve config))
+              ceiling  (:max-friction config)]
           [(line left (fy ceiling) right (fy ceiling) accent "5 4")
            (label (- right 4) (- (fy ceiling) 8) "max-friction"
                   :anchor "end" :size 11 :fill accent)
@@ -141,7 +142,7 @@
         ; The habits, marked on the curve and named in a legend
         (for [[score _] habits] (dot (fx score) (fy (waits score))))
         (for [[i [score name]] (map-indexed vector habits)
-              :let [y (+ 84 (* i 22))]]
+              :let             [y (+ 84 (* i 22))]]
           [(dot (+ left 34) (- y 4))
            (label (+ left 48) y (str name " &#8212; score " score
                                      ", waits " (spoken (waits score))))])]))

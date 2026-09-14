@@ -47,20 +47,28 @@ home-manager.users.YOU.home.packages = with pkgs; [
 I gotchu, bro. All you need is [Babashka] on your `$PATH`, plus a
 directory that takes precedence over the binary you want to wrap:
 
-1. Put `methadone.clj` somewhere permanent:
+1. Build the single-file script. The sources are a handful of
+   namespaces, but what gets installed is one file, concatenated in
+   dependency order:
 
    ```sh
-   install -Dm755 methadone.clj ~/.local/share/methadone/methadone.clj
+   bb build
    ```
 
-2. Symlink it into a directory that comes _earlier_ in your `$PATH` than
+2. Put it somewhere permanent:
+
+   ```sh
+   install -Dm755 methadone ~/.local/share/methadone/methadone
+   ```
+
+3. Symlink it into a directory that comes _earlier_ in your `$PATH` than
    the real binary, with that binary's name:
 
    ```sh
-   ln -s ~/.local/share/methadone/methadone.clj ~/.local/bin/claude
+   ln -s ~/.local/share/methadone/methadone ~/.local/bin/claude
    ```
 
-3. Rinse and repeat for anything else you want to wrap: one symlink
+4. Rinse and repeat for anything else you want to wrap: one symlink
    each, all pointing at the same script.
 
 Methadone works out what to run from the name it was invoked as. It

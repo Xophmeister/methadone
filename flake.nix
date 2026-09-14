@@ -15,7 +15,7 @@
 
       # Everything the QA tasks operate on, so that the checks and the
       # formatter cannot drift apart over which files they cover.
-      clojure = "methadone.clj methadone_test.clj plot.clj bb.edn";
+      clojure = "src test dev bb.edn";
       nix = "flake.nix methadone.nix";
 
       # A QA check: run the script against a writeable copy of the

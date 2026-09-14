@@ -1,2 +1,5 @@
 # Nix build output
 result
+
+# The single-file distributable, built by `bb build`
+/methadone
