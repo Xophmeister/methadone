@@ -6,7 +6,8 @@
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
             [methadone.config :as config]
-            [methadone.policy :as policy]))
+            [methadone.policy :as policy]
+            [methadone.store :as store]))
 
 (def minute (* 60 1000))
 (def hour (* 60 minute))
@@ -61,11 +62,22 @@
                  0.0
                  (range steps)))))
 
-(defn session
-  "The session with the given ID, wherever in the log it appears."
-  [log id]
+(defn logged
+  "A whole log, as the store writes one, around the sessions a test
+  actually cares about. The version is taken from the store rather than
+  written out here, so that raising it does not mean editing every
+  fixture -- the one test that pins the number does so deliberately."
+  [sessions]
 
-  (first (filter #(= id (:id %)) (mapcat val log))))
+  {:version @#'store/log-version :sessions sessions :history {}})
+
+(defn session
+  "The session with the given ID, wherever in the sessions it appears.
+  Takes the sessions themselves rather than the whole log, since the
+  pure operations deal in those and the envelope is the store's affair."
+  [sessions id]
+
+  (first (filter #(= id (:id %)) (mapcat val sessions))))
 
 (defn own-pid [] (.pid (java.lang.ProcessHandle/current)))
 

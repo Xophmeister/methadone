@@ -40,7 +40,9 @@
     (signals/signals! signals/nag-signals)
 
     (let [now  (System/currentTimeMillis)
-          used (-> (store/read-log (:log config))
+          used (-> (:log config)
+                   store/read-log
+                   :sessions
                    (log/reap store/pid-alive?)
                    (policy/sessions-for name)
                    (policy/usage now (:window config)))]

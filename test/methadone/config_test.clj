@@ -5,7 +5,8 @@
   "Settings, their vetting and where they are read from."
   (:require [clojure.test :as t]
             [methadone.config :as config]
-            [methadone.fixtures :refer [config day minute with-temp-dir]]
+            [methadone.fixtures :refer [ago config day minute now with-temp-dir]]
+            [methadone.log :as log]
             [methadone.policy :as policy]))
 
 (t/use-fixtures :each with-temp-dir)
@@ -86,6 +87,31 @@
                      [[10 10] [50 1500]]]] ; Beyond it
       (t/is (seq (config/problems (config/configure [{:anchors anchors}]))))))
 
+  (t/testing "a retention shorter than the window is refused"
+    (t/is (seq (config/problems (config/configure [{:retention [2 :days]}])))))
+
+  (t/testing "though one exactly as long as it is not"
+    ; The rule is "at least", so the boundary belongs on the good side
+    ; of it: a window with no headroom is austere, not broken.
+    (t/is (empty? (config/problems (config/configure [{:retention [7 :days]}])))))
+
+  (t/testing "and the two are compared as spans, not as written"
+    ; The vetting runs before the spans are resolved, so both may still
+    ; be [n unit] pairs, and a pair is no more comparable to another
+    ; pair than to a bare number of milliseconds.
+    (t/is (seq (config/problems (config/configure [{:window    [7 :days]
+                                                    :retention [1 :days]}]))))
+    (t/is (empty? (config/problems (config/configure [{:window    [1 :days]
+                                                       :retention [7 :days]}])))))
+
+  (t/testing "but stays quiet when one of the two is itself the fault"
+    ; Otherwise a single bad span earns two complaints, the second of
+    ; them about a comparison that could not be made. Both ways of
+    ; being bad are covered: one that does not parse at all, and one
+    ; that parses into a number no span may take.
+    (t/is (= 1 (count (config/problems (config/configure [{:window [7 :fortnights]}])))))
+    (t/is (= 1 (count (config/problems (config/configure [{:retention -1}]))))))
+
   (t/testing "a log path must be a path"
     (t/is (seq (config/problems (config/configure [{:log 42}])))))
 
@@ -108,3 +134,34 @@
   (t/testing "and every one of them is refused before it can"
     (doseq [anchors [[[10 10] [50 1500]] [[10 0] [50 120]] [[10 10] [50 1200]]]]
       (t/is (seq (config/problems (assoc config :anchors anchors)))))))
+
+(t/deftest keeping-less-than-is-counted
+  ; What the retention guard is really for. Retention decides what is
+  ; kept and the window decides what is counted, so setting the first
+  ; below the second throws sessions away while the friction still
+  ; wants them. Nothing complains: the score simply comes out lower
+  ; than the usage earned, which is the wrong direction to be wrong in.
+  (let [week     (* 7 day)
+        sessions {"claude" (vec (for [d (range 7)]
+                                  {:id    d
+                                   :start (ago (* d day))
+                                   :end   (+ (ago (* d day)) (* 60 minute))}))}
+
+        used (fn [log] (policy/usage (policy/sessions-for log "claude") now week))
+        kept (log/prune sessions now (* 2 day))]
+
+    (t/testing "a retention below the window discards what the window counts"
+      (t/is (< (count (policy/sessions-for kept "claude"))
+               (count (policy/sessions-for sessions "claude")))))
+
+    (t/testing "so the score falls, though the usage did not"
+      (t/is (< (policy/score config (used kept))
+               (policy/score config (used sessions)))))
+
+    (t/testing "and the wait falls with it"
+      (t/is (< (policy/friction config (used kept))
+               (policy/friction config (used sessions)))))
+
+    (t/testing "which is why the configuration is refused before it can"
+      (t/is (seq (config/problems (assoc config :retention (* 2 day)))))
+      (t/is (empty? (config/problems (assoc config :retention week)))))))

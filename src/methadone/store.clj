@@ -2,15 +2,25 @@
 ; SPDX-License-Identifier: GPL-3.0-or-later
 
 ; Log format ($XDG_STATE_HOME/methadone/log.edn):
+;
 ; ```edn
-; {"<BINARY>"
-;  [{:id    <UUID>           ; unique session ID
-;    :pid   <METHADONE PID>  ; the process Methadone is supervising
-;    :start <INST>           ; when the session began
-;    :end   <INST>           ; when the session ended (optional)
-;    :seen  <INST>}          ; last heartbeat of a running session
-;   ...]
-;  ...}
+; {:version  <INT>                             ; log format version
+;
+;  :sessions {"<STR: BINARY>"                  ; keyed by binary basename
+;             [{:id    <UUID>                  ; unique session ID
+;               :pid   <INT: METHADONE PID>    ; the Methadone process
+;               :start <INST>                  ; when the session began
+;               :end   <INST>                  ; when the session ended (optional)
+;               :seen  <INST>}                 ; last heartbeat of a running session
+;              ...]
+;             ...}
+;
+;  :history {"<STR: BINARY>"                   ; keyed by binary basename
+;             {<STR: YYYY-MM-DD>               ; keyed by (local) date of the sessions
+;              {:count    <INT>                ; number of sessions on that date
+;               :duration <INT: MILLISECONDS>  ; total duration of sessions on that date
+;              ...}
+;            ...}}
 ; ```
 
 (ns methadone.store
@@ -19,7 +29,10 @@
   (:require [babashka.fs :as fs]
             [clojure.edn :as edn]
             [clojure.pprint :as pp]
-            [methadone.log :as log]))
+            [methadone.log :as log]
+            [methadone.util :refer [die]]))
+
+(def ^:const ^:private log-version 1)
 
 (def ^:private timestamps [:start :end :seen])
 
@@ -52,8 +65,23 @@
   [path]
 
   (if (fs/exists? path)
-    (decode (edn/read-string (slurp (fs/file path))))
-    {}))
+    (let [log (edn/read-string (slurp (fs/file path)))]
+      (cond
+        ; Legacy logs have no version, so upgrade
+        (not (contains? log :version)) {:version  log-version
+                                        :sessions (decode log)
+                                        :history  {}}
+
+        ; Current log version
+        (= log-version (:version log)) (update log :sessions decode)
+
+        ; Unsupported log version
+        :else (die (str "Log version " (:version log) " is not supported"))))
+
+    ; Empty log as fallback
+    {:version  log-version
+     :sessions {}
+     :history  {}}))
 
 (defn write-log!
   "Encode the log and atomically write it to the given file.
@@ -65,7 +93,9 @@
   (let [tmp  (fs/create-temp-file {:dir    (fs/parent path)
                                    :prefix "log"
                                    :suffix ".tmp"})
-        data (with-out-str (pp/pprint (encode log)))]
+        data (with-out-str (pp/pprint (-> log
+                                          (update :sessions encode)
+                                          (update :history #(update-vals % (partial into (sorted-map)))))))]
 
     (spit (fs/file tmp) data)
     (fs/move tmp path {:replace-existing true
@@ -115,10 +145,10 @@
   [{:keys [log retention]} f]
 
   (with-lock (str log ".lock")
-    (let [updated (-> (read-log log)
-                      (log/reap pid-alive?)
-                      (log/prune (System/currentTimeMillis) retention)
-                      f)]
+    (let [updated (update (read-log log) :sessions #(-> %
+                                                        (log/reap pid-alive?)
+                                                        (log/prune (System/currentTimeMillis) retention)
+                                                        f))]
 
       (write-log! updated log)
       updated)))

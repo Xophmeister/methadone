@@ -56,8 +56,11 @@
   correcting a file is not a guessing game one error at a time."
   [{:keys [max-friction anchors log] :as config}]
 
-  (let [ceiling (when (and (number? max-friction) (pos? max-friction))
-                  max-friction)]
+  (let [ceiling   (when (and (number? max-friction) (pos? max-friction))
+                    max-friction)
+        valid     #(let [ms (span (get config %))] (when (pos? (or ms 0)) ms))
+        window    (valid :window)
+        retention (valid :retention)]
 
     (concat
      (for [k (remove (set (keys defaults)) (keys config))]
@@ -67,6 +70,9 @@
            :when (not (pos? (or (span (get config k)) 0)))]
        (str k " must be a positive span: milliseconds, or [n unit] with"
             " unit one of " (str/join ", " (sort (map name (keys units))))))
+
+     (when (and window retention (< retention window))
+       [":retention must be at least as long as :window"])
 
      (when-not ceiling
        [":max-friction must be a positive number of seconds"])
