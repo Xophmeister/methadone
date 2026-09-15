@@ -31,15 +31,61 @@
 
                 log))
 
+(defn- session-date
+  "Return the local date of the session's start time, in ISO-8601 format
+  (YYYY-MM-DD, the default for `java.time.LocalDate.toString`), relative
+  to the given time zone. One's 'day' usually starts before midnight,
+  but can end either side of it, hence using the start time for
+  accounting.
+
+  NOTE tz ought to be a java.time.ZoneId; this is the responsibility of
+  the caller."
+  [{:keys [start]} tz]
+
+  (-> start
+      java.time.Instant/ofEpochMilli
+      (.atZone tz)
+      .toLocalDate
+      .toString))
+
+(defn- current?
+  "Current sessions have not ended, or have ended within the retention
+  period."
+  [session now retention]
+
+  (or (nil? (:end session))
+      (> (:end session) (- now retention))))
+
 (defn prune
-  "Prune sessions that ended after the given retention period, ignoring
-  any that are still running."
-  [log now retention]
+  "Prune the log to just those sessions that are current."
+  [log now retention] (filter-sessions #(current? % now retention) log))
 
-  (filter-sessions #(or (nil? (:end %))
-                        (> (:end %) (- now retention)))
+(defn expired
+  "Return the sessions that have expired, so that they can be aggregated."
+  [log now retention] (filter-sessions #(not (current? % now retention)) log))
 
-                   log))
+(defn tally
+  "Reduce sessions to one bucket per binary per local day, holding how
+  many there were and how long they ran altogether.
+
+  Notes:
+  - This makes session history cheap enough to keep indefinitely for
+    aggregation purposes.
+  - A session is charged to the day on which it began, regardless of when
+    it ended.
+  - Still-running-sessions are measured up to now."
+  [sessions now tz]
+
+  (into {} (remove (comp empty? val))
+        (update-vals sessions #(apply merge-with
+                                      (partial merge-with +)
+                                      {}
+                                      (mapv (fn [session]
+                                              {(session-date session tz)
+                                               {:count    1
+                                                :duration (max 0 (- (or (:end session) now)
+                                                                    (:start session)))}})
+                                            %)))))
 
 (defn open
   "Add a session to the log, under the given binary."

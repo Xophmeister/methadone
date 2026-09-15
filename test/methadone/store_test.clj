@@ -141,6 +141,90 @@
                       (log-path))
     (t/is (nil? (session (:sessions (store/update-log! (store) identity)) :ancient)))))
 
+(t/deftest retiring-to-history
+  ; What the tally is for: retention takes a session's detail away, but
+  ; the fact of it and the time it ran outlive it.
+  ;
+  ; These assert on what survives rather than on what goes, because
+  ; every mistake in this wiring so far has been silent in exactly the
+  ; same way -- the sessions disappear precisely as they always did and
+  ; the history simply never fills. Nothing throws, and a month passes
+  ; before anyone could notice.
+  (let [totals (fn [history binary]
+                 (reduce (partial merge-with +)
+                         {:count 0 :duration 0}
+                         (vals (get history binary))))]
+
+    (t/testing "a session past retention leaves its count and duration behind"
+      (let [start (recently (* 40 day))
+            end   (recently (* 31 day))]
+
+        (store/write-log! (logged {"claude" [{:id :ancient :pid 1 :start start :end end}]})
+                          (log-path))
+
+        (let [after (store/update-log! (store) identity)]
+          (t/is (nil? (session (:sessions after) :ancient)) "the session itself is gone")
+          (t/is (= {:count 1 :duration (- end start)} (totals (:history after) "claude"))))))
+
+    (t/testing "and so does one abandoned so long ago that only reaping can date it"
+      ; Reaping is what gives an orphan an :end, and without one it can
+      ; never look expired. Split before the reap and it passes for a
+      ; running session, then the prune destroys it unremarked -- which
+      ; is the single case nothing else in the suite goes near.
+      (store/write-log! (logged {"claude" [{:id    :orphan
+                                            :pid   (dead-pid)
+                                            :start (recently (* 40 day))}]})
+                        (log-path))
+
+      (let [after (store/update-log! (store) identity)]
+        (t/is (nil? (session (:sessions after) :orphan)) "the session itself is gone")
+        (t/is (= 1 (:count (totals (:history after) "claude")))
+              "but it is still counted as the launch it was")))
+
+    (t/testing "a session still inside retention contributes nothing yet"
+      (store/write-log! (logged {"claude" [{:id    :recent
+                                            :pid   1
+                                            :start (recently (* 2 hour))
+                                            :end   (recently hour)}]})
+                        (log-path))
+
+      (let [after (store/update-log! (store) identity)]
+        (t/is (some? (session (:sessions after) :recent)))
+        (t/is (= {} (:history after)))))
+
+    (t/testing "a day already in the history is added to, not overwritten"
+      ; Two sessions opened at the very same moment, so they cannot help
+      ; but share a day, retired by two separate transactions. A merge
+      ; that reached only as deep as the date would leave the second
+      ; standing in place of the first, and a day's work would go.
+      (let [start (recently (* 40 day))
+            a     {:id :first :pid 1 :start start :end (recently (* 31 day))}
+            b     {:id :second :pid 1 :start start :end (recently (* 38 day))}]
+
+        (store/write-log! (logged {"claude" [a]}) (log-path))
+        (store/update-log! (store) identity)
+        (store/update-log! (store) #(update % "claude" conj b))
+
+        (let [history (:history (store/update-log! (store) identity))]
+          (t/is (= 1 (count (get history "claude"))) "both fell on the one day")
+          (t/is (= {:count 2 :duration (+ (- (:end a) start) (- (:end b) start))}
+                   (totals history "claude"))))))
+
+    (t/testing "and running the same transaction again adds nothing"
+      ; The session is removed and the history written in one atomic
+      ; write, so there is nothing left to count a second time -- but
+      ; this is the assertion that would notice if that ever stopped
+      ; being true, and double counting inflates every figure drawn.
+      (store/write-log! (logged {"claude" [{:id    :ancient
+                                            :pid   1
+                                            :start (recently (* 40 day))
+                                            :end   (recently (* 31 day))}]})
+                        (log-path))
+
+      (let [once  (:history (store/update-log! (store) identity))
+            twice (:history (store/update-log! (store) identity))]
+        (t/is (= once twice))))))
+
 (t/deftest session-lifecycle
   (let [started (recently (* 5 minute))
         id      (store/open-session! (store) "claude" started)]

@@ -138,17 +138,33 @@
   `(with-lock* ~lockfile (fn [] ~@body)))
 
 (defn update-log!
-  "Apply f to the configured log, under an exclusive lock, writing the
-  result back and returning it. Orphaned sessions are reaped and expired
-  ones pruned on the way through, so that the log self-heals on every
-  transaction."
+  "Apply f to the log's sessions, under an exclusive lock, writing the
+  result back and returning the whole log.
+
+  Orphaned sessions are reaped on the way through, then divided: the
+  sessions still inside the retention period are handed to f, whereas
+  those beyond it are tallied into the history before they go. A
+  session's count and duration are therefore preserved whatever becomes
+  of it; only detail is lost as sessions age out.
+
+  The log self-heals on every transaction as a result."
   [{:keys [log retention]} f]
 
   (with-lock (str log ".lock")
-    (let [updated (update (read-log log) :sessions #(-> %
-                                                        (log/reap pid-alive?)
-                                                        (log/prune (System/currentTimeMillis) retention)
-                                                        f))]
+    (let [state (read-log log)
+          now   (System/currentTimeMillis)
+
+          reaped   (-> (:sessions state)
+                       (log/reap pid-alive?))
+          to-keep  (-> reaped
+                       (log/prune now retention)
+                       f)
+          aged-out (-> reaped
+                       (log/expired now retention)
+                       (log/tally now (java.time.ZoneId/systemDefault)))
+          updated  (-> state
+                       (assoc :sessions to-keep)
+                       (update :history #(merge-with (partial merge-with (partial merge-with +)) % aged-out)))]
 
       (write-log! updated log)
       updated)))
