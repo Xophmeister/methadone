@@ -23,7 +23,8 @@
                   (System/exit (if (pos? (+ fail error)) 1 0))))}
 
   build {:doc      "Build the single-file distributable."
-         :requires ([babashka.fs :as fs])
+         :requires ([babashka.fs :as fs]
+                    [methadone.process :refer [methadone-bin]])
 
          ; bb refuses to write over a script that is already there, and
          ; adds no shebang of its own: the Nix wrapper supplies one, but
@@ -32,13 +33,13 @@
          ; Named build rather than uberscript because a task of the
          ; latter name shadows the built-in command it has to call, and
          ; so calls itself until the machine gives out.
-         :task (let [out "methadone"]
-                 (fs/delete-if-exists out)
-                 (shell "bb" "uberscript" out "--classpath" "src"
+         :task (do
+                 (fs/delete-if-exists methadone-bin)
+                 (shell "bb" "uberscript" methadone-bin "--classpath" "src"
                         "-m" "methadone.main")
-                 (spit out (str "#!/usr/bin/env bb\n\n" (slurp out)))
-                 (fs/set-posix-file-permissions out "rwxr-xr-x")
-                 (println "Wrote" out))}
+                 (spit methadone-bin (str "#!/usr/bin/env bb\n\n" (slurp methadone-bin)))
+                 (fs/set-posix-file-permissions methadone-bin "rwxr-xr-x")
+                 (println "Wrote" methadone-bin))}
 
   plot {:doc      "Regenerate the README's plots."
         :requires ([plot])

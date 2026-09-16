@@ -3,7 +3,8 @@
 
 (ns methadone.log
   "Pure operations over the whole log. Anything needing the outside
-  world is injected, so that these stay testable against fixtures.")
+  world is injected, so that these stay testable against fixtures."
+  (:require [methadone.util :as util]))
 
 (defn map-sessions [f log] (update-vals log #(mapv f %)))
 (defn- filter-sessions [pred log] (update-vals log #(filterv pred %)))
@@ -32,21 +33,37 @@
                 log))
 
 (defn- session-date
-  "Return the local date of the session's start time, in ISO-8601 format
-  (YYYY-MM-DD, the default for `java.time.LocalDate.toString`), relative
-  to the given time zone. One's 'day' usually starts before midnight,
-  but can end either side of it, hence using the start time for
-  accounting.
+  "Return the local date (YYYY-MM-DD; the default for
+  `java.time.LocalDate.toString`) on which the session began, in the
+  given time zone. One's 'day' usually starts before midnight, but can
+  end either side of it, hence using the start time for accounting."
+  [session tz]
 
-  NOTE tz ought to be a java.time.ZoneId; this is the responsibility of
-  the caller."
-  [{:keys [start]} tz]
-
-  (-> start
-      java.time.Instant/ofEpochMilli
-      (.atZone tz)
-      .toLocalDate
+  (-> (:start session)
+      (util/epoch->date tz)
       .toString))
+
+(defn accumulate-days
+  "History records are maps of the form:
+
+    {<STR: YYYY-MM-DD> {:count <INT> :duration <INT>}}
+
+  where counts and durations sum across all sessions that began on the
+  same day."
+  [& days]
+
+  (apply merge-with (partial merge-with +) days))
+
+(defn accumulate-history
+  "Historical records are recorded in the log against their binary name,
+  so are an extra level deeper than `accumulate-days`.
+
+    {<STR: BINARY> <MAP: HISTORY>}
+
+  where the same accumulation applies."
+  [& histories]
+
+  (apply merge-with accumulate-days histories))
 
 (defn- current?
   "Current sessions have not ended, or have ended within the retention
@@ -77,8 +94,7 @@
   [sessions now tz]
 
   (into {} (remove (comp empty? val))
-        (update-vals sessions #(apply merge-with
-                                      (partial merge-with +)
+        (update-vals sessions #(apply accumulate-days
                                       {}
                                       (mapv (fn [session]
                                               {(session-date session tz)

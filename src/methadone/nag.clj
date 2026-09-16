@@ -5,7 +5,8 @@
   "What Methadone says while it makes the user wait, and the waiting
   itself."
   (:require [methadone.policy :as policy]
-            [methadone.tty :as tty]))
+            [methadone.tty :as tty]
+            [methadone.util :as util]))
 
 (def ^:private consternations
   "The list of consternations given to the user during the nag countdown,
@@ -29,19 +30,6 @@
    "You're right: Drugs don't work."
    "Your grey cells will live to see another day!"
    "Welcome to the revolution, comrade!"])
-
-(defn spoken
-  "A span of milliseconds, in whichever units read most naturally."
-  [ms]
-
-  (let [seconds (long (/ ms 1000))
-        hours   (quot seconds 3600)
-        minutes (rem (quot seconds 60) 60)]
-
-    (cond
-      (pos? hours) (format "%dh %dm" hours minutes)
-      (pos? minutes) (format "%dm" minutes)
-      :else (format "%ds" (rem seconds 60)))))
 
 (defn scorn
   "Scorn the user for (over)using the agent, with a consternation chosen
@@ -72,7 +60,7 @@
     (format "Lately: %d %s, %s running, for a score of %d."
             launches
             (if (= 1 launches) "launch" "launches")
-            (spoken (:duration usage))
+            (util/spoken (:duration usage))
             (Math/round (double (policy/score config usage))))))
 
 (defn- countdown

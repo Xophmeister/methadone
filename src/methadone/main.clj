@@ -29,12 +29,15 @@
             [methadone.policy :as policy]
             [methadone.process :as process]
             [methadone.signals :as signals]
+            [methadone.stats :as stats]
             [methadone.store :as store]))
 
-(defn -main [& args]
-  (let [config (config/configure!)
-        binary (process/target (System/getProperty "babashka.file"))
-        name   (fs/file-name binary)]
+(defn- supervise
+  "Supervise the given binary, logging its usage and applying the
+  configured friction policy."
+  [config binary & args]
+
+  (let [name (fs/file-name binary)]
 
     (fs/create-dirs (fs/parent (:log config)))
     (signals/signals! signals/nag-signals)
@@ -64,3 +67,12 @@
       (let [exit (:exit @proc)]
         (store/close-session! config id (System/currentTimeMillis))
         (System/exit exit)))))
+
+(defn -main [& args]
+  (let [config (config/configure!)
+        me     (System/getProperty "babashka.file")]
+
+    (cond
+      (process/alone? me) (stats/report config)
+      :else               (let [binary (process/target me)]
+                            (apply supervise config binary args)))))

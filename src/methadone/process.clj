@@ -7,6 +7,9 @@
             [babashka.process :as p]
             [methadone.util :refer [die]]))
 
+(def ^:const methadone-bin "methadone")
+(def ^:const wrapper-env "METHADONE_BINARY")
+
 (defn spawn
   "Run the given binary with the given arguments, inheriting Methadone's
   streams so that the agent has the terminal.
@@ -37,9 +40,19 @@
   "The binary Methadone is supervising, as an absolute path."
   [me]
 
-  (or (System/getenv "METHADONE_BINARY")  ; Env var, mostly for Nix...
-      (some-> (discover me) str)          ; ...otherwise, PATH discovery...
+  (or (System/getenv wrapper-env)  ; Env var, mostly for Nix...
+      (some-> (discover me) str)   ; ...otherwise, PATH discovery...
 
       ; ...or die horribly
-      (die (str "METHADONE_BINARY not set, nor " (fs/file-name me)
+      (die (str wrapper-env " not set, nor " (fs/file-name me)
                 " found in PATH!"))))
+
+(defn alone?
+  "Under Nix, Methadone is always invoked under its own name, with the
+  wrapper env var set. As such, to detect whether we're running alone,
+  we check both the binary name and the nilness of the env var."
+  [me]
+
+  (and (some? me)
+       (nil? (System/getenv wrapper-env))
+       (= methadone-bin (fs/file-name me))))

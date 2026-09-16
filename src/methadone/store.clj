@@ -164,7 +164,7 @@
                        (log/tally now (java.time.ZoneId/systemDefault)))
           updated  (-> state
                        (assoc :sessions to-keep)
-                       (update :history #(merge-with (partial merge-with (partial merge-with +)) % aged-out)))]
+                       (update :history (partial log/accumulate-history aged-out)))]
 
       (write-log! updated log)
       updated)))

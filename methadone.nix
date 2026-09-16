@@ -37,7 +37,11 @@ let
     {:linters {:namespace-name-mismatch {:level :off}}}
   '';
 
-  methadone = writers.writeBabashkaBin "methadone" {
+  # NOTE The output binary's name must match the package's expectations
+  # (see `methadone.process`), so that process discovery works.
+  methadone-bin = "methadone";
+
+  methadone = writers.writeBabashkaBin methadone-bin {
     check = "${lib.getExe clj-kondo} --config ${kondo} --lint";
   } uberscript;
 in
@@ -47,6 +51,6 @@ runCommand binary
     meta.mainProgram = binary;
   }
   ''
-    makeWrapper ${methadone}/bin/methadone $out/bin/${binary} \
+    makeWrapper ${methadone}/bin/${methadone-bin} $out/bin/${binary} \
       --set METHADONE_BINARY ${package}/bin/${binary}
   ''

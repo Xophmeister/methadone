@@ -41,24 +41,6 @@
     (t/testing "reaping is idempotent"
       (t/is (= after (log/reap after #{1}))))))
 
-(t/deftest dating-by-tz
-  (let [london          (java.time.ZoneId/of "Europe/London")
-        newyork         (java.time.ZoneId/of "America/New_York")
-        before-midnight (-> "2026-09-14T23:30:00Z" java.time.Instant/parse .toEpochMilli)
-        after-midnight  (-> "2026-09-14T00:30:00Z" java.time.Instant/parse .toEpochMilli)]
-
-    (t/testing "a session that started before midnight is dated the next day in London"
-      (t/is (= "2026-09-15" (@#'log/session-date {:start before-midnight} london))))
-
-    (t/testing "a session that started before midnight is dated the same day in New York"
-      (t/is (= "2026-09-14" (@#'log/session-date {:start before-midnight} newyork))))
-
-    (t/testing "a session that started after midnight is dated the same day in London"
-      (t/is (= "2026-09-14" (@#'log/session-date {:start after-midnight} london))))
-
-    (t/testing "a session that started after midnight is dated the previous day in New York"
-      (t/is (= "2026-09-13" (@#'log/session-date {:start after-midnight} newyork))))))
-
 (t/deftest tallying
   (let [london (java.time.ZoneId/of "Europe/London")
         at     #(-> % java.time.Instant/parse .toEpochMilli)

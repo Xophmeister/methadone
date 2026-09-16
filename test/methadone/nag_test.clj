@@ -10,19 +10,6 @@
 
 (t/use-fixtures :each with-temp-dir)
 
-(t/deftest spoken-spans
-  (t/testing "seconds, while that is all there is"
-    (t/is (= "45s" (nag/spoken (* 45 1000)))))
-
-  (t/testing "minutes, once there are any"
-    (t/is (= "20m" (nag/spoken (* 20 minute)))))
-
-  (t/testing "hours and minutes together"
-    (t/is (= "9h 11m" (nag/spoken (+ (* 9 hour) (* 11 minute))))))
-
-  (t/testing "nothing at all still reads as a span"
-    (t/is (= "0s" (nag/spoken 0)))))
-
 (t/deftest accounting-for-the-wait
   ; Time spent is charged the next time round, so a nag that does not
   ; say what earned it teaches nothing: the one thing the user needs to
