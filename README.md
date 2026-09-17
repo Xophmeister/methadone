@@ -21,12 +21,24 @@ configuration, for example, like so:
 ```nix
 { pkgs, ... }:
 
+let
+  methadone = pkgs.callPackage ./path/to/methadone.nix { };
+in
 {
-  environment.systemPackages = with pkgs; [
-    (callPackage ./path/to/methadone.nix {
-        package = pkgs.claude-code;
-        binary = "claude";
+  environment.systemPackages = [
+    (methadone.wrap {
+      package = pkgs.claude-code;
+      binary = "claude";
     })
+
+    # Wrap as many as you like; they share one log
+    (methadone.wrap {
+      package = pkgs.github-copilot-cli;
+      binary = "copilot";
+    })
+
+    # Methadone under its own name, which reports rather than wrapping
+    methadone.stats
   ];
 }
 ```
@@ -34,13 +46,16 @@ configuration, for example, like so:
 or, with [Home-manager]:
 
 ```nix
-home-manager.users.YOU.home.packages = with pkgs; [
-  (callPackage ./path/to/methadone.nix {
-      package = pkgs.github-copilot-cli;
-      binary = "copilot";
+home-manager.users.YOU.home.packages = [
+  (methadone.wrap {
+    package = pkgs.github-copilot-cli;
+    binary = "copilot";
   })
 ];
 ```
+
+`methadone.stats` is optional, and installs a `methadone` command that
+reports on what the log holds rather than standing in front of anything.
 
 ### I don't use NixOS
 

@@ -6,8 +6,6 @@
   clj-kondo,
   makeBinaryWrapper,
   runCommand,
-  package,
-  binary ? package.pname or package.name,
 }:
 
 let
@@ -45,12 +43,42 @@ let
     check = "${lib.getExe clj-kondo} --config ${kondo} --lint";
   } uberscript;
 in
-runCommand binary
-  {
-    nativeBuildInputs = [ makeBinaryWrapper ];
-    meta.mainProgram = binary;
-  }
-  ''
-    makeWrapper ${methadone}/bin/${methadone-bin} $out/bin/${binary} \
-      --set METHADONE_BINARY ${package}/bin/${binary}
-  ''
+{
+  # Methadone standing in front of an agent, under that agent's name.
+  # METHADONE_BINARY is what tells it there is something to supervise:
+  # the wrapper always invokes the script under its own name, so the
+  # name alone cannot distinguish this from a report.
+  wrap =
+    {
+      package,
+      binary ? package.pname or package.name,
+    }:
+    runCommand binary
+      {
+        nativeBuildInputs = [ makeBinaryWrapper ];
+        meta.mainProgram = binary;
+      }
+      ''
+        makeWrapper ${methadone}/bin/${methadone-bin} $out/bin/${binary} \
+          --set METHADONE_BINARY ${package}/bin/${binary}
+      '';
+
+  # Methadone under its own name, reporting on what it has recorded.
+  #
+  # The variable is cleared rather than merely left unset: it is
+  # inherited by everything a supervised agent runs, so a report asked
+  # for from inside a session would otherwise find it, take itself for a
+  # wrapper and launch a second agent. Methadone clears it for the
+  # agent's children too, which covers a hand-installed symlink -- this
+  # covers the case of a stale one already in the environment.
+  stats =
+    runCommand methadone-bin
+      {
+        nativeBuildInputs = [ makeBinaryWrapper ];
+        meta.mainProgram = methadone-bin;
+      }
+      ''
+        makeWrapper ${methadone}/bin/${methadone-bin} $out/bin/${methadone-bin} \
+          --unset METHADONE_BINARY
+      '';
+}
