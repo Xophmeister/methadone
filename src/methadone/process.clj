@@ -18,13 +18,20 @@
   so that killing Methadone outright takes the agent with it rather than
   leaving it orphaned. SIGKILL cannot be caught, so this is the only way
   to cover that case; it is a Linux-specific facility, so elsewhere, the
-  shutdown hook is the only safeguard."
+  shutdown hook is the only safeguard.
+
+  The environment is passed on intact but for the wrapper variable,
+  which is Methadone's own affair and no business of what it supervises.
+  Left in place it would be inherited by everything the agent runs, and
+  Methadone invoked from in there would take itself for a wrapper with
+  an agent to launch -- and launch a second one, instead of reporting."
   [binary args]
 
   (p/process (cond->> (cons binary args)
                (fs/which "setpriv") (concat ["setpriv" "--pdeathsig" "KILL" "--"]))
 
-             {:inherit true}))
+             {:inherit true
+              :env     (dissoc (into {} (System/getenv)) wrapper-env)}))
 
 (defn- discover
   "The first binary in the PATH under the name Methadone was invoked as,
