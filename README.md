@@ -10,8 +10,8 @@ little tool to seize the means of production!
 Rather than disabling these tools altogether, this script wraps them
 with a start-up timeout that grows with how much you've leant on them
 lately -- both how often you've reached for them and how long you've
-kept them running -- along with a helpful message to remind you that you
-should be in control of your own work.
+kept them running -- along with a "helpful" message to remind you that
+you should be in control of your own work.
 
 ## Usage
 
@@ -21,12 +21,24 @@ configuration, for example, like so:
 ```nix
 { pkgs, ... }:
 
+let
+  methadone = pkgs.callPackage ./path/to/methadone.nix { };
+in
 {
-  environment.systemPackages = with pkgs; [
-    (callPackage ./path/to/methadone.nix {
-        package = pkgs.claude-code;
-        binary = "claude";
+  environment.systemPackages = [
+    (methadone.wrap {
+      package = pkgs.claude-code;
+      binary = "claude";
     })
+
+    # Wrap as many as you like; they share one log
+    (methadone.wrap {
+      package = pkgs.github-copilot-cli;
+      binary = "copilot";
+    })
+
+    # Methadone under its own name, which reports rather than wrapping
+    methadone.stats
   ];
 }
 ```
@@ -34,34 +46,53 @@ configuration, for example, like so:
 or, with [Home-manager]:
 
 ```nix
-home-manager.users.YOU.home.packages = with pkgs; [
-  (callPackage ./path/to/methadone.nix {
-      package = pkgs.github-copilot-cli;
-      binary = "copilot";
+home-manager.users.YOU.home.packages = [
+  (methadone.wrap {
+    package = pkgs.github-copilot-cli;
+    binary = "copilot";
   })
 ];
 ```
+
+`methadone.stats` is optional and installs a `methadone` command that
+reports on what the log holds rather than standing in front of anything.
 
 ### I don't use NixOS
 
 I gotchu, bro. All you need is [Babashka] on your `$PATH`, plus a
 directory that takes precedence over the binary you want to wrap:
 
-1. Put `methadone.clj` somewhere permanent:
+1. Build the single-file script. The sources are a handful of
+   namespaces, but what gets installed is one file, concatenated in
+   dependency order:
 
    ```sh
-   install -Dm755 methadone.clj ~/.local/share/methadone/methadone.clj
+   bb build
    ```
 
-2. Symlink it into a directory that comes _earlier_ in your `$PATH` than
+2. Put it somewhere permanent:
+
+   ```sh
+   install -Dm755 methadone ~/.local/share/methadone/methadone
+   ```
+
+3. Symlink it into a directory that comes _earlier_ in your `$PATH` than
    the real binary, with that binary's name:
 
    ```sh
-   ln -s ~/.local/share/methadone/methadone.clj ~/.local/bin/claude
+   ln -s ~/.local/share/methadone/methadone ~/.local/bin/claude
    ```
 
-3. Rinse and repeat for anything else you want to wrap: one symlink
+4. Rinse and repeat for anything else you want to wrap: one symlink
    each, all pointing at the same script.
+
+5. Optionally, symlink it under its _own_ name as well. Invoked as
+   `methadone`, with no agent standing behind it, it reports on the log
+   rather than wrapping anything:
+
+   ```sh
+   ln -s ~/.local/share/methadone/methadone ~/.local/bin/methadone
+   ```
 
 Methadone works out what to run from the name it was invoked as. It
 looks along `$PATH` for the next binary of that name which isn't itself,
@@ -75,10 +106,10 @@ works: the wrapper sets it for you.
 
 ## Methodology
 
-The wait is a function of two things: how often you've launched the
-tool, and how long you've kept it running. Recent use counts for more
-than old and the whole thing is bounded, so that Methadone never becomes
-so obstructive that deleting it is the rational move.
+The wait is a function of two things: how often you've launched the tool
+and how long you've kept it running. Recent use counts for more than old
+and the whole thing is bounded, so that Methadone never becomes so
+obstructive that deleting it is the rational move.
 
 ### Nothing expires; it fades
 
@@ -87,7 +118,7 @@ weighted by its age instead, with an exponential decay in which $T$ is
 now and $W$ is the `:window`:
 
 ```math
-w(t) = e^{-(T - t) / W}
+w(t) = e^\frac{-(T - t)}{W}
 ```
 
 ![The decay of a session's weight with its age](/doc/decay.svg)
@@ -100,7 +131,7 @@ counting, they just matter less.
 
 `:window` is therefore a mean lifetime rather than a cut-off. The
 half-life follows from it, $w(t) = \frac{1}{2}$ at an age of
-$T - t = W \ln 2$, which a week's window puts a shade under five days.
+$T - t = W \ln 2$, which a week's window puts at a tad under five days.
 
 That gives two decayed totals: a count of launches $N$ and a time spent
 $D$. They are weighed differently, because a launch is an instant and
@@ -115,9 +146,9 @@ D = \sum_i \int_{s_i}^{e_i} w(t) \, dt = W \sum_i (w(e_i) - w(s_i))
 ```
 
 Integrating, rather than weighting the whole span at its start,
-discounts the older part of a long session against its newer, and it
-has a pleasant consequence. A session you never close has $e_i = T$, so
-it contributes $W(1 - w(s_i))$: a quantity that approaches one window's
+discounts the older part of a long session against its newer and it has
+a pleasant consequence. A session you never close has $e_i = T$, so it
+contributes $W(1 - w(s_i))$: a quantity that approaches one window's
 worth and never reaches it, however long you leave the thing running.
 Its old end decays exactly as fast as its new end accrues. Leaving a
 session open forever is bounded, not infinite.
@@ -131,8 +162,8 @@ added together into a single score:
 u = N + \frac{D}{E}
 ```
 
-$E$ is the `:session-equivalent`, that rate, and at its default of 30
-minutes it reads as a question in English: _how long may a session run
+$E$ is the `:session-equivalent`. That rate and at its default of 30
+minutes reads as a question in English: _How long may a session run
 before it counts as another launch?_
 
 Both terms are needed, because the friction is a start-up cost and
@@ -149,9 +180,18 @@ time you start one, Methadone says what it is weighing as it makes you
 wait:
 
 ```
-Do not overuse this! Use your brain, instead!
+Back for a top-up already, are we?
 Lately: 6 launches, 9h 11m running, for a score of 25.
 ```
+
+The scolding escalates with the score as well. A ladder of messages,
+ordered from mild concern to open denunciation, is spread evenly across
+the span of the score that the curve actually varies over, which is
+twice its midpoint; past the top of that span there is nothing harsher
+left to say, so the sternest of them stands. The words therefore keep
+pace with the wait rather than repeating one rebuke at every level and a
+week bad enough to be worth remarking on is remarked upon differently
+from a quiet one.
 
 Consider the following three habits to make that concrete; each a week's
 worth, at the point where the decay has settled:
@@ -162,9 +202,9 @@ worth, at the point where the decay has settled:
 | A heavy week           | 40 short sessions        | 47    |
 | One long session a day | 7 sessions of 8 hours    | 119   |
 
-The last is what the duration term exists to catch. Under the old
-formula, which counted launches over a calendar day, it cost exactly the
-same as the lightest.
+The last is what the duration term exists to catch. Under the
+[original](/releases/tag/v0.1.0) formula, which counted launches over a
+calendar day, it cost exactly the same as the lightest.
 
 ### The curve
 
@@ -255,7 +295,7 @@ you want to differ.
 | Setting               | Default              | What it is                                         |
 | :-------------------- | :------------------- | :------------------------------------------------- |
 | `:window`             | `[7 :days]`          | The decay's mean lifetime                          |
-| `:retention`          | `[30 :days]`         | How long a finished session is kept before pruning |
+| `:retention`          | `[30 :days]`         | How long a session is kept in full before it is reduced to a daily tally |
 | `:heartbeat`          | `[60 :seconds]`      | How often a running session marks itself alive     |
 | `:session-equivalent` | `[30 :minutes]`      | Runtime worth as much as one launch                |
 | `:max-friction`       | `1200`               | The longest possible wait, in seconds              |
@@ -266,6 +306,14 @@ Spans of history are given as `[n unit]`, where the unit is one of
 `:ms`, `:seconds`, `:minutes`, `:hours` or `:days`; or as a bare number
 of milliseconds, if you prefer. Waits, being what you actually sit
 through, are always plain seconds.
+
+`:retention` must be at least `:window` and Methadone refuses to start
+if it isn't: sessions the friction still counts would otherwise be
+reduced before it could count them and the wait would quietly fall for
+reasons you hadn't asked for. There is no need to set it generously
+beyond that, though: What is kept past it is the daily tally, which is
+kept for good regardless, so a longer retention buys detail nobody reads
+at the cost of a file rewritten on every heartbeat.
 
 ### System-wide defaults
 
@@ -295,11 +343,51 @@ logarithm and the wait that falls out of the arithmetic is _zero_.
 
 ## State
 
-Methadone keeps a log at `$XDG_STATE_HOME/methadone/log.edn` -- usually
-`~/.local/state/methadone/log.edn` -- with one entry per session per
-wrapped binary, recording when it started and when it ended. Set `:log`
-if you would rather it lived elsewhere. Deleting it resets the friction
-to nothing, which segues neatly to...
+Methadone keeps a log at `$XDG_STATE_HOME/methadone/log.edn`; usually
+`~/.local/state/methadone/log.edn`. Set `:log` if you would rather it
+lived elsewhere.
+
+It holds two things. Sessions are recorded in full, one entry per launch
+per wrapped binary, with the moment it began and the moment it ended;
+these are what the friction is worked out from and they are kept for
+`:retention`. Once a session is older than that it isn't discarded but
+reduced: the detail goes and a tally of the day it began on -- how many
+launches, how long altogether -- is added to a history that is kept
+indefinitely.
+
+The second half costs a few dozen bytes a day and reaches back as far as
+you have been running Methadone, which is what the report below is drawn
+from.
+
+## Reading it back
+
+Invoked under its own name, with no agent in front of it, Methadone
+reports rather than wraps:
+
+```
+$ methadone
+The last 7 days and what it costs you now:
+  binary   launches    running   score    wait
+  claude          9    11h 50m      21     20s
+  copilot         2        45m       2      6s
+
+Scored by week:
+  earlier    59    46    35    36   now
+```
+
+The two halves of that table are counted differently, deliberately.
+Launches and running time are a plain tally over seven whole days, which
+you can check against your own memory of the week. The score and the
+wait are decayed by age and are what you would pay for reaching for the
+tool right now; i.e., the very figures that produced your last nag.
+
+The trend is scored by week rather than decayed, so that its numbers can
+be compared with one another and with the rows above them. It draws on
+the history as well as on the sessions still held in full, so it reaches
+back further than `:retention` does.
+
+Under Nix, `methadone.stats` installs it. Otherwise it is the symlink in
+step 5 above.
 
 ## Isn't this trivial to bypass?
 
@@ -308,12 +396,18 @@ circumvent it. The idea is to provide enough friction to make you think
 twice before reaching for agentic AI tools and, hopefully, building a
 habit of re-engaging with your own work.
 
+Deleting the log is the obvious way round, but the reporting means
+deleting isn't free: The history goes with it and the history is the
+half that accrues rather than the half that charges you. A fortnight in,
+that's no loss at all. A year in and it's a year of knowing what you
+actually did.
+
 Ctrl+C is not one of the ways round it, but nor is it meant to be a
 trap. During the countdown it abandons the launch outright: Methadone
-exits, the agent never starts and nothing is written to the log, so
-thinking better of it costs nothing and is not held against you next
-time. What it cannot do is hurry the wait along, there being no agent on
-the far side of it to hurry towards. Once the agent is running,
+commends you, exits, the agent never starts and nothing is written to
+the log, so thinking better of it costs nothing and is not held against
+you next time. What it cannot do is hurry the wait along, there being no
+agent on the far side of it to hurry towards. Once the agent is running,
 Methadone ignores Ctrl+C and leaves the agent to answer it, as it is
 much better placed to know what interrupting it should mean.
 

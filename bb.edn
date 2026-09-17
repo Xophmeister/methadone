@@ -1,15 +1,49 @@
-{:paths ["."]
+{:paths ["src" "test" "dev"]
 
  :tasks
- {test {:doc "Run the unit tests."
-        :requires ([clojure.test :as t]
-                   [methadone-test])
-        :task (let [{:keys [fail error]} (t/run-tests 'methadone-test)]
-                (System/exit (if (pos? (+ fail error)) 1 0)))}
+ {test {:doc      "Run the unit tests."
+        :requires ([babashka.fs :as fs]
+                   [clojure.string :as str]
+                   [clojure.test :as t])
 
-  plot {:doc "Regenerate the README's plots."
+        ; Discovered rather than listed, so that a new test namespace is
+        ; run by virtue of existing and cannot be forgotten here.
+        :task (let [namespace (fn [path]
+                                (-> (str (fs/relativize "test" path))
+                                    (str/replace (re-pattern "\\.clj$") "")
+                                    (str/replace "/" ".")
+                                    (str/replace "_" "-")
+                                    symbol))
+
+                    namespaces (sort (map namespace
+                                          (fs/glob "test" "**/*_test.clj")))]
+
+                (apply require namespaces)
+                (let [{:keys [fail error]} (apply t/run-tests namespaces)]
+                  (System/exit (if (pos? (+ fail error)) 1 0))))}
+
+  build {:doc      "Build the single-file distributable."
+         :requires ([babashka.fs :as fs]
+                    [methadone.process :refer [methadone-bin]])
+
+         ; bb refuses to write over a script that is already there, and
+         ; adds no shebang of its own: the Nix wrapper supplies one, but
+         ; a hand-installed copy must be executable in its own right.
+         ;
+         ; Named build rather than uberscript because a task of the
+         ; latter name shadows the built-in command it has to call, and
+         ; so calls itself until the machine gives out.
+         :task (do
+                 (fs/delete-if-exists methadone-bin)
+                 (shell "bb" "uberscript" methadone-bin "--classpath" "src"
+                        "-m" "methadone.main")
+                 (spit methadone-bin (str "#!/usr/bin/env bb\n\n" (slurp methadone-bin)))
+                 (fs/set-posix-file-permissions methadone-bin "rwxr-xr-x")
+                 (println "Wrote" methadone-bin))}
+
+  plot {:doc      "Regenerate the README's plots."
         :requires ([plot])
-        :task (plot/generate!)}}
+        :task     (plot/generate!)}}
 
  :aliases
- {:neil {:project {:version "0.3.0"}}}}
+ {:neil {:project {:version "0.4.0"}}}}

@@ -15,7 +15,7 @@
 
       # Everything the QA tasks operate on, so that the checks and the
       # formatter cannot drift apart over which files they cover.
-      clojure = "methadone.clj methadone_test.clj plot.clj bb.edn";
+      clojure = "src test dev bb.edn";
       nix = "flake.nix methadone.nix";
 
       # A QA check: run the script against a writeable copy of the
@@ -64,7 +64,8 @@
         # itself.
         smoke =
           let
-            wrapped = pkgs.callPackage ./methadone.nix {
+            methadone = pkgs.callPackage ./methadone.nix { };
+            wrapped = methadone.wrap {
               package = pkgs.coreutils;
               binary = "date";
             };
@@ -77,6 +78,18 @@
 
             if ${wrapped}/bin/date --nope; then
               echo "Methadone did not propagate a failing exit code" >&2
+              exit 1
+            fi
+
+            # The same script under its own name reports rather than
+            # supervising, even with the wrapper variable in the
+            # environment -- which is how anyone asking for a report
+            # from inside a session would find it.
+            export METHADONE_BINARY=/a/stale/path
+            ${methadone.stats}/bin/methadone | tee report
+
+            if ! grep -q "^  date " report; then
+              echo "The report did not account for the supervised runs" >&2
               exit 1
             fi
 
