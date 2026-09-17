@@ -126,7 +126,7 @@
         ; The two halves of the table are counted differently, and a
         ; reader given "5 launches" beside "score 7" with no explanation
         ; will reasonably take one of them for a mistake.
-        (println (str (tty/ansi :bold) "The last 7 days, and what it costs you now:" (tty/ansi :reset)))
+        (println (str (tty/ansi :bold) "The last 7 days and what it costs you now:" (tty/ansi :reset)))
         (run! println (tabulate (standings config (:sessions log) by-day now tz 7)))
 
         (println)
