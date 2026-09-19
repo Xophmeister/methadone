@@ -172,7 +172,7 @@
 
         (crosshair (Math/log 2) 0.5
                    (+ (dx (Math/log 2)) 10) (- (dy 0.5) 10)
-                   "half-life: window &#215; ln 2, a shade under 5 days")
+                   "half-life: window &#215; ln 2, a tad under 5 days")
 
         (crosshair 1 (/ 1 Math/E)
                    (dx 1.5) (dy 0.34)

@@ -1,4 +1,4 @@
-{:paths ["src" "test" "dev"]
+{:paths ["src" "test" "doc"]
 
  :tasks
  {test {:doc      "Run the unit tests."
