@@ -1,5 +1,7 @@
 # Methadone
 
+[![CI Status][ci:badge]][ci:status]
+
 It occurred to me that agentic AI tools can exacerbate the feeling of
 estrangement from ones own work, per Marx's [Theory of Alienation], and
 are in direct contradiction to Naur's treatise of [Programming as Theory
@@ -203,7 +205,7 @@ worth, at the point where the decay has settled:
 | One long session a day | 7 sessions of 8 hours    | 119   |
 
 The last is what the duration term exists to catch. Under the
-[original](/releases/tag/v0.1.0) formula, which counted launches over a
+[original][release:v0.1.0] formula, which counted launches over a
 calendar day, it cost exactly the same as the lightest.
 
 ### The curve
@@ -418,11 +420,27 @@ set to reinforce the idea that you should be in control of your own
 work. Copy [this](/AGENTS.md.eg) wherever your agent of choice looks for
 instructions.
 
+## So... Did you use AI to write this?
+
+I sure did...but maybe not in the way you are thinking. Almost all the
+application code is hand-written, under Claude's tutelage; part of
+Methadone's remit, despite my better judgement, is as a small project
+for me to learn Clojure. The only big chunks of code that are generated
+are the tests -- I hate writing tests! -- and the SVG plotter for this
+`README`. The friction model was brainstormed between me and the AI and
+some of the prose (here and in comments/docstrings) have been expounded
+at my request.
+
+![Maybe I like the misery](/doc/mrs-doyle.png)
+
 <!-- Links -->
 
-[theory of alienation]: https://en.wikipedia.org/wiki/Marx%27s_theory_of_alienation
-[programming as theory building]: https://pablo.rauzy.name/dev/naur1985programming.pdf
-[original post]: https://hachyderm.io/@xophmeister/116857208020117822
-[nix]: https://nixos.org
-[home-manager]: https://nix-community.github.io/home-manager
 [babashka]: https://babashka.org
+[ci:badge]: https://img.shields.io/github/actions/workflow/status/Xophmeister/methadone/ci.yaml?style=for-the-badge&logo=github
+[ci:status]: https://github.com/Xophmeister/methadone/actions/workflows/ci.yaml
+[home-manager]: https://nix-community.github.io/home-manager
+[nix]: https://nixos.org
+[original post]: https://hachyderm.io/@xophmeister/116857208020117822
+[programming as theory building]: https://pablo.rauzy.name/dev/naur1985programming.pdf
+[release:v0.1.0]: https://github.com/Xophmeister/methadone/releases/tag/v0.1.0
+[theory of alienation]: https://en.wikipedia.org/wiki/Marx%27s_theory_of_alienation
